@@ -1,0 +1,66 @@
+<html>
+<head>
+<meta http-equiv="x-ua-compatible" content="IE=9" />
+<title>启动服务器与隧道</title>
+<hta:application id="launcher" applicationname="Launcher" border="thin" caption="yes" showintaskbar="yes" singleinstance="yes" sysmenu="yes" windowstate="normal"/>
+<style>
+body { font-family: Segoe UI, Arial, sans-serif; padding: 20px; background: #2b2b2b; color: #eee; }
+button { padding: 10px 20px; margin: 5px; font-size: 14px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 4px; }
+button:hover { background: #1086e0; }
+.status { margin-top: 15px; padding: 10px; background: #1e1e1e; border-radius: 4px; white-space: pre-wrap; font-family: Consolas, monospace; font-size: 12px; }
+h1 { color: #4ec9b0; }
+</style>
+</head>
+<body>
+<h1>格格的宫殿 · 启动器</h1>
+<button onclick="runServer()">🚀 启动服务器</button>
+<button onclick="runTunnel()">🌐 启动隧道</button>
+<button onclick="runBoth()">⚡ 一键启动全部</button>
+<div id="status" class="status">就绪...</div>
+
+<script language="VBScript">
+Dim shell, fso
+Set shell = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
+
+strDir = "C:\Users\leido\AppData\Roaming\TRAE SOLO CN\ModularData\ai-agent\work-mode-projects\6a745750a04e5bc65d92b6a3"
+
+Sub SetStatus(msg)
+    document.getElementById("status").innerText = msg
+End Sub
+
+Sub FixPolicy()
+    On Error Resume Next
+    shell.RegWrite "HKCU\Software\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell\ExecutionPolicy", "RemoteSigned", "REG_SZ"
+    On Error GoTo 0
+End Sub
+
+Sub runServer()
+    FixPolicy
+    SetStatus "正在启动 Node.js 服务器..."
+    shell.CurrentDirectory = strDir
+    shell.Run "node server.js", 1, False
+    SetStatus "服务器已启动！请访问 http://localhost:3000"
+End Sub
+
+Sub runTunnel()
+    FixPolicy
+    SetStatus "正在启动 cloudflared 隧道..."
+    shell.Run "cloudflared tunnel --url http://localhost:3000", 1, False
+    SetStatus "隧道已启动！请在 cloudflared 窗口中查看公网地址"
+End Sub
+
+Sub runBoth()
+    FixPolicy
+    SetStatus "正在启动服务器 + 隧道..."
+    shell.CurrentDirectory = strDir
+    shell.Run "node server.js", 1, False
+    WScript.Sleep 3000
+    shell.Run "cloudflared tunnel --url http://localhost:3000", 1, False
+    SetStatus "服务器与隧道均已启动！" & vbCrLf & _
+              "本机: http://localhost:3000" & vbCrLf & _
+              "公网: 请查看 cloudflared 窗口中的地址"
+End Sub
+</script>
+</body>
+</html>

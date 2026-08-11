@@ -1,0 +1,12 @@
+services:
+  - name: gege-palace
+    type: web
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+    healthCheckPath: /api/health
+    autoDeploy: true

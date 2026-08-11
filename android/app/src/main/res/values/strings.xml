@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">格格的宫殿</string>
+    <string name="title_activity_main">格格的宫殿</string>
+    <string name="package_name">com.gege.palace</string>
+    <string name="custom_url_scheme">com.gege.palace</string>
+</resources>

@@ -1,0 +1,21 @@
+{
+  "name": "gege-palace",
+  "version": "3.0.0",
+  "description": "格格的宫殿 - 真实支付版（支持码支付/BufPay对接）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "install": "npm install"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "cors": "^2.8.6",
+    "crypto": "^1.0.1",
+    "express": "^4.22.2"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

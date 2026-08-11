@@ -1,0 +1,11 @@
+node_modules/
+*.log
+.env
+.env.local
+users.json
+sessions.json
+payment_config.json
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak

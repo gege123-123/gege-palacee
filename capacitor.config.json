@@ -1,0 +1,8 @@
+{
+  "appId": "com.gege.palace",
+  "appName": "格格的宫殿",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

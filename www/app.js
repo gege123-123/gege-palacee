@@ -2528,7 +2528,6 @@ document.addEventListener('DOMContentLoaded', function() {
 async function loadGalleryAndTraining() {
   await loadGallerySlots();
   await loadPhotoWall();
-  loadTrainingTiers();
   renderTributeGrid();
   checkGalleryLock();
 }

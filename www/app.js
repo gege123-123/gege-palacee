@@ -1,14 +1,19 @@
 // ============ 格格的宫殿 · 纯前端版本 ============
 
 // ============ GitHub 存储配置 ============
-var GITHUB_CONFIG = {
-  owner: 'gege123-123',
-  repo: 'gege-palacee',
-  branch: 'main',
-  token: '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',
-  imagesDir: 'images',
-  dataDir: 'data'
-};
+function getGithubConfig() {
+  var token = localStorage.getItem('gege_github_token') || '';
+  return {
+    owner: 'gege123-123',
+    repo: 'gege-palacee',
+    branch: 'main',
+    token: token,
+    imagesDir: 'images',
+    dataDir: 'data'
+  };
+}
+
+var GITHUB_CONFIG = getGithubConfig();
 
 // ============ GitHub API 功能 ============
 
@@ -38,30 +43,35 @@ function getExtension(mimeType) {
 
 // 上传文件到 GitHub
 function uploadToGitHub(filePath, content, message) {
+  var config = getGithubConfig();
+  if (!config.token) {
+    return Promise.reject(new Error('GitHub Token 未配置'));
+  }
+  
   var encodedContent = btoa(unescape(encodeURIComponent(content)));
   
   return new Promise(function(resolve, reject) {
     // 先尝试获取现有文件的 SHA（用于更新）
-    fetch('https://api.github.com/repos/' + GITHUB_CONFIG.owner + '/' + GITHUB_CONFIG.repo + '/contents/' + filePath, {
+    fetch('https://api.github.com/repos/' + config.owner + '/' + config.repo + '/contents/' + filePath, {
       headers: {
-        'Authorization': 'token ' + GITHUB_CONFIG.token,
+        'Authorization': 'token ' + config.token,
         'Accept': 'application/vnd.github.v3+json'
       }
     })
     .then(function(response) { return response.json(); })
     .then(function(data) {
       var sha = data.sha || null;
-      return fetch('https://api.github.com/repos/' + GITHUB_CONFIG.owner + '/' + GITHUB_CONFIG.repo + '/contents/' + filePath, {
+      return fetch('https://api.github.com/repos/' + config.owner + '/' + config.repo + '/contents/' + filePath, {
         method: 'PUT',
         headers: {
-          'Authorization': 'token ' + GITHUB_CONFIG.token,
+          'Authorization': 'token ' + config.token,
           'Accept': 'application/vnd.github.v3+json',
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           message: message || 'Upload ' + filePath,
           content: encodedContent,
-          branch: GITHUB_CONFIG.branch,
+          branch: config.branch,
           sha: sha
         })
       });
@@ -69,7 +79,7 @@ function uploadToGitHub(filePath, content, message) {
     .then(function(response) { return response.json(); })
     .then(function(data) {
       if (data.content) {
-        resolve(data.content.download_url || 'https://raw.githubusercontent.com/' + GITHUB_CONFIG.owner + '/' + GITHUB_CONFIG.repo + '/' + GITHUB_CONFIG.branch + '/' + filePath);
+        resolve(data.content.download_url || 'https://raw.githubusercontent.com/' + config.owner + '/' + config.repo + '/' + config.branch + '/' + filePath);
       } else {
         reject(data);
       }
@@ -96,8 +106,51 @@ function saveToGitHub(filePath, data, message) {
   return uploadToGitHub(filePath, JSON.stringify(data, null, 2), message);
 }
 
+// 检查 GitHub Token 是否已配置
+function checkGithubToken() {
+  var config = getGithubConfig();
+  if (!config.token) {
+    showGithubTokenDialog();
+    return false;
+  }
+  return true;
+}
+
+// 显示设置 GitHub Token 的对话框
+function showGithubTokenDialog() {
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.style.zIndex = '10000';
+  modal.innerHTML = '<div class="modal-content" style="background:#1a1a2e;color:#FFD700;max-width:500px;padding:25px;border:2px solid #FFD700;border-radius:12px;">' +
+    '<h3 style="color:#FFD700;margin:0 0 15px;text-align:center;">🔑 设置 GitHub 存储</h3>' +
+    '<p style="color:#ccc;font-size:13px;margin:0 0 15px;line-height:1.5;">上传照片需要 GitHub Personal Access Token。<br>请在 <a href="https://github.com/settings/tokens/new" target="_blank" style="color:#FFD700;text-decoration:underline;">GitHub Token 页面</a> 创建一个（勾选 repo 权限）。</p>' +
+    '<input id="githubTokenInput" type="text" placeholder="粘贴你的 GitHub Token (ghp_...)" style="width:100%;padding:10px;border:1px solid #FFD700;border-radius:6px;background:#000;color:#fff;margin-bottom:15px;box-sizing:border-box;">' +
+    '<div style="display:flex;gap:10px;">' +
+    '<button onclick="saveGithubToken()" style="flex:1;padding:10px;background:#FFD700;color:#000;border:none;border-radius:6px;cursor:pointer;font-weight:bold;">保存</button>' +
+    '<button onclick="this.closest(\'.modal-overlay\').remove()" style="padding:10px 20px;background:#333;color:#fff;border:none;border-radius:6px;cursor:pointer;">取消</button>' +
+    '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  document.getElementById('githubTokenInput').focus();
+}
+
+// 保存 GitHub Token
+function saveGithubToken() {
+  var input = document.getElementById('githubTokenInput');
+  if (!input || !input.value.trim()) {
+    showToast('请输入 Token');
+    return;
+  }
+  localStorage.setItem('gege_github_token', input.value.trim());
+  GITHUB_CONFIG = getGithubConfig();
+  showToast('Token 保存成功！现在可以上传照片了');
+  var modal = document.querySelector('.modal-overlay');
+  if (modal) modal.remove();
+}
+
 // 上传图片文件
 function uploadImageFile(file, directory) {
+  var config = getGithubConfig();
   return new Promise(function(resolve, reject) {
     var reader = new FileReader();
     reader.onload = function(event) {
@@ -105,7 +158,7 @@ function uploadImageFile(file, directory) {
       var mime = file.type;
       var ext = getExtension(mime);
       var fileName = Date.now() + '_' + Math.random().toString(36).substr(2, 8) + '.' + ext;
-      var filePath = GITHUB_CONFIG.imagesDir + '/' + directory + '/' + fileName;
+      var filePath = config.imagesDir + '/' + directory + '/' + fileName;
       
       uploadToGitHub(filePath, dataUrl, 'Upload ' + file.name)
         .then(function(url) {
@@ -2228,6 +2281,7 @@ var gallerySlotIndex = 0;
 
 function uploadGalleryMedia(slotIndex) {
   if (!state.isAdmin) { showToast('请格格先登录控制殿'); return; }
+  if (!checkGithubToken()) return;
   gallerySlotIndex = slotIndex;
   var input = document.getElementById('galleryInput');
   if (input) input.click();
@@ -2239,7 +2293,8 @@ if (galleryInput) {
     var files = e.target.files;
     if (!files || files.length === 0) return;
     var albumId = gallerySlotIndex;
-    var dataFile = GITHUB_CONFIG.dataDir + '/gallery_' + albumId + '.json';
+    var config = getGithubConfig();
+    var dataFile = config.dataDir + '/gallery_' + albumId + '.json';
     
     showToast('正在上传到云端...');
     
@@ -2336,6 +2391,7 @@ async function loadPhotoWall() {
 
 function uploadPhotoWall() {
   if (!state.isAdmin) { showToast('请格格先登录控制殿'); return; }
+  if (!checkGithubToken()) return;
   var input = document.getElementById('photoWallInput');
   if (input) {
     input.value = '';
@@ -2348,13 +2404,14 @@ async function handlePhotoWallUpload(e) {
   if (!files || files.length === 0) return;
   
   var targetCount = Math.min(files.length, 3);
+  var config = getGithubConfig();
   
   showToast('正在上传到云端...');
   
   try {
     var wallData = [];
     try {
-      wallData = await fetchFromGitHub(GITHUB_CONFIG.dataDir + '/photo_wall.json');
+      wallData = await fetchFromGitHub(config.dataDir + '/photo_wall.json');
     } catch(e) { /* 空 */ }
     
     for (var i = 0; i < targetCount; i++) {
@@ -2372,7 +2429,7 @@ async function handlePhotoWallUpload(e) {
       }
     }
     
-    await saveToGitHub(GITHUB_CONFIG.dataDir + '/photo_wall.json', wallData, 'Update photo wall');
+    await saveToGitHub(config.dataDir + '/photo_wall.json', wallData, 'Update photo wall');
     loadPhotoWall();
     showToast('照片上传成功！共' + targetCount + '张');
   } catch(err) {
@@ -2414,9 +2471,10 @@ function viewPhotoWall(slotIndex) {
 }
 
 async function syncDailyAlbumToWall() {
+  var config = getGithubConfig();
   var photos = [];
   try {
-    photos = await fetchFromGitHub(GITHUB_CONFIG.dataDir + '/gallery_1.json');
+    photos = await fetchFromGitHub(config.dataDir + '/gallery_1.json');
   } catch(e) {
     try { photos = JSON.parse(localStorage.getItem('gege_gallery_photos_1')) || []; } catch(e2) { photos = []; }
   }
@@ -2425,7 +2483,7 @@ async function syncDailyAlbumToWall() {
   
   var wallData = [];
   try {
-    wallData = await fetchFromGitHub(GITHUB_CONFIG.dataDir + '/photo_wall.json');
+    wallData = await fetchFromGitHub(config.dataDir + '/photo_wall.json');
   } catch(e) { /* 空 */ }
   
   for (var i = 0; i < Math.min(photos.length, 3); i++) {
@@ -2439,7 +2497,7 @@ async function syncDailyAlbumToWall() {
   }
   
   try {
-    await saveToGitHub(GITHUB_CONFIG.dataDir + '/photo_wall.json', wallData, 'Sync photo wall');
+    await saveToGitHub(config.dataDir + '/photo_wall.json', wallData, 'Sync photo wall');
   } catch(e) { /* 忽略错误 */ }
   
   loadPhotoWall();

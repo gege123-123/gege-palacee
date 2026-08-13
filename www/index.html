@@ -1,1 +1,1314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>格格的宫殿 · 爱新觉罗</title>
+<link rel="stylesheet" href="style.css?v=20260813f">
+</head>
+<body>
 
+<!-- 用户登录/注册弹窗 -->
+<div id="userLoginModal" class="modal">
+  <div class="modal-content user-login-modal">
+    <div class="user-login-header">
+      <div class="user-login-seal">🐾</div>
+      <h2 id="userLoginTitle">奴才登录</h2>
+    </div>
+    
+    <!-- 网络状态显示 -->
+    <div id="networkStatus" class="network-status" style="display:none;">
+      <span id="networkStatusIcon">🔍</span>
+      <span id="networkStatusText">检测网络中...</span>
+    </div>
+    
+    <div id="loginForm">
+      <p class="user-login-hint">奴才请报名觐见格格</p>
+      <input type="text" id="loginUsername" placeholder="奴才名号">
+      <input type="password" id="loginPassword" placeholder="觐见口令">
+      <button class="save-btn big" onclick="userLogin()">报名觐见</button>
+      <p class="user-switch" onclick="showRegisterForm()">奴才首次来此？点此注册</p>
+    </div>
+    
+    <div id="registerForm" style="display:none;">
+      <p class="user-login-hint">新奴才请登记造册</p>
+      <input type="text" id="registerUsername" placeholder="奴才名号（2-20字）">
+      <input type="password" id="registerPassword" placeholder="觐见口令（至少4位）">
+      <input type="password" id="registerPassword2" placeholder="确认口令">
+      <button class="save-btn big" onclick="userRegister()">登记造册</button>
+      <p class="user-switch" onclick="showLoginForm()">已有名号？点此登录</p>
+    </div>
+    
+    <!-- 网络诊断提示 -->
+    <div id="networkHelp" class="network-help" style="display:none;">
+      <p class="network-help-title">⚠️ 网络连接问题</p>
+      <p class="network-help-text">奴才无法连接到格格的宫殿服务器</p>
+      <div class="network-help-steps">
+        <p>请按以下步骤检查：</p>
+        <p>1️⃣ 确认手机和电脑在<b>同一个WiFi</b>下</p>
+        <p>2️⃣ 确认访问地址：<span id="serverUrl" class="server-url"></span></p>
+        <p>3️⃣ 检查电脑<b>防火墙</b>是否阻止</p>
+        <p class="network-help-sub">电脑操作：控制面板 → Windows防火墙 → 关闭专用网络</p>
+      </div>
+      <button class="save-btn" onclick="testNetwork()">🔄 重新检测</button>
+    </div>
+  </div>
+</div>
+
+<!-- 浮动设置按钮（始终可见） -->
+<div id="floatingSettings" class="floating-settings" onclick="showAdminLogin()" title="格格设置">
+  <span>⚙</span>
+</div>
+
+<!-- 用户信息显示（登录后显示） -->
+<div id="userInfoBar" class="user-info-bar" style="display:none;">
+  <span id="userInfoName">奴才</span>
+  <span class="user-info-divider">|</span>
+  <span>🪙 <span id="userInfoGold">0</span></span>
+  <span class="user-info-divider">|</span>
+  <span>叩拜 <span id="userInfoKneel">0</span> 次</span>
+  <button class="user-logout-btn" onclick="userLogout()" title="退出">🚪</button>
+</div>
+
+<!-- 管理员登录弹窗 -->
+<div id="adminLoginModal" class="modal">
+  <div class="modal-content admin-login">
+    <div class="login-imperial-seal">
+      <div class="seal-inner">
+        <div class="seal-row"><span>格</span><span>格</span></div>
+        <div class="seal-row"><span>专</span><span>属</span></div>
+      </div>
+    </div>
+    <h2>🔐 格格专属入口</h2>
+    <p class="admin-hint">请输入格格专属口令<br><small style="color:#999;">（首次使用请先登录设置）</small></p>
+    <input type="password" id="adminPassword" placeholder="格格口令">
+    <button class="save-btn" onclick="adminLogin()">进入控制殿</button>
+    <button class="btn-cancel" onclick="closeAdminLogin()">取消</button>
+  </div>
+</div>
+
+<!-- 充值弹窗 -->
+<div id="rechargeModal" class="modal">
+  <div class="modal-content recharge-modal-content">
+    <span class="modal-close" onclick="closeRecharge()">&times;</span>
+    <h2 class="modal-title">💰 充金币 · 奴才卖身钱</h2>
+    <p class="recharge-hint">1元 = 10金币 · 奴才当以血汗奉上</p>
+    <div class="recharge-options">
+      <div class="recharge-card" data-amount="10" onclick="selectRecharge(10, this)">
+        <div class="recoin-count">10</div>
+        <div class="recoin-value">金币</div>
+        <div class="recoin-price">¥1.00</div>
+        <div class="recoin-label">跑腿费</div>
+      </div>
+      <div class="recharge-card selected" data-amount="50" onclick="selectRecharge(50, this)">
+        <div class="recoin-count">50</div>
+        <div class="recoin-value">金币</div>
+        <div class="recoin-price">¥5.00</div>
+        <div class="recoin-badge">送5金</div>
+        <div class="recoin-label">零花钱</div>
+      </div>
+      <div class="recharge-card" data-amount="100" onclick="selectRecharge(100, this)">
+        <div class="recoin-count">100</div>
+        <div class="recoin-value">金币</div>
+        <div class="recoin-price">¥10.00</div>
+        <div class="recoin-badge">送15金</div>
+        <div class="recoin-label">血汗钱</div>
+      </div>
+      <div class="recharge-card" data-amount="500" onclick="selectRecharge(500, this)">
+        <div class="recoin-count">500</div>
+        <div class="recoin-value">金币</div>
+        <div class="recoin-price">¥50.00</div>
+        <div class="recoin-badge">送100金</div>
+        <div class="recoin-label">月工资</div>
+      </div>
+      <div class="recharge-card" data-amount="1000" onclick="selectRecharge(1000, this)">
+        <div class="recoin-count">1000</div>
+        <div class="recoin-value">金币</div>
+        <div class="recoin-price">¥100.00</div>
+        <div class="recoin-badge">送300金</div>
+        <div class="recoin-label">私房钱</div>
+      </div>
+      <div class="recharge-card" data-amount="5000" onclick="selectRecharge(5000, this)">
+        <div class="recoin-count">5000</div>
+        <div class="recoin-value">金币</div>
+        <div class="recoin-price">¥500.00</div>
+        <div class="recoin-badge">送2000金</div>
+        <div class="recoin-label">全部家产</div>
+      </div>
+    </div>
+    
+    <!-- 支付方式选择 -->
+    <div class="pay-method-row">
+      <span>支付方式：</span>
+      <span class="pay-method-label" id="payMethodLabel">📱 扫码付款</span>
+    </div>
+    
+    <!-- 扫码支付区域 -->
+    <div class="scan-pay-area" id="scanPayArea">
+      <div class="scan-pay-title">📱 奴才扫码卖身</div>
+      <div class="scan-pay-qr" id="scanPayQr">
+        <div class="scan-qr-placeholder" id="scanQrPlaceholder">
+          <span>点击下方按钮<br>生成付款二维码</span>
+        </div>
+      </div>
+      <div class="scan-pay-tip">
+        <p>※ 选择金额后，点击"生成付款码"扫码</p>
+        <p>※ 付款成功后金币自动到账</p>
+      </div>
+    </div>
+    
+    <button class="save-btn big recharge-btn" onclick="generateRechargeQR()">
+      <span id="rechargeBtnText">生成付款码 ¥5.00 → 55金币</span>
+    </button>
+    <button class="btn-cancel" onclick="closeRecharge()" style="width:100%;margin-top:8px;">取消</button>
+    <p class="recharge-notice">※ 奴才活着就是为了卖身给格格，这是天经地义</p>
+  </div>
+</div>
+
+<!-- 充值支付验证弹窗（扫码后） -->
+<div id="rechargePayModal" class="modal">
+  <div class="modal-content recharge-pay-modal">
+    <span class="modal-close" onclick="closeRechargePay()">&times;</span>
+    <h2 class="modal-title">🔍 扫码付款 · 自动验证</h2>
+    <div class="recharge-pay-content">
+      <div class="recharge-pay-amount" id="rechargePayAmount">¥0.00</div>
+      <div class="recharge-pay-gold" id="rechargePayGold">获得 0 金币</div>
+      
+      <div class="recharge-pay-qr" id="rechargePayQr">
+        <div class="pay-qr-loading">
+          <div class="spinner"></div>
+          <p>正在生成付款码...</p>
+        </div>
+      </div>
+      
+      <div class="recharge-pay-info" id="rechargePayInfo">
+        <p class="pay-info-status">⏳ 等待扫码付款</p>
+        <p class="pay-info-tip">请使用微信/支付宝扫描上方二维码</p>
+        <p class="pay-info-timer">剩余时间：<span id="rechargePayTimer">30:00</span></p>
+      </div>
+      
+      <div class="recharge-pay-hint" id="rechargePayHint" style="display:none;">
+        <p>🔄 系统正在主动查询支付状态...</p>
+      </div>
+      
+      <div class="recharge-pay-actions">
+        <button class="btn-cancel" onclick="closeRechargePay()">取消</button>
+        <button class="save-btn" id="confirmPaidBtn" onclick="confirmRechargePaid()">
+          ✅ 已付款，确认到账
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 付款验证弹窗 -->
+<div id="paymentVerifyModal" class="modal">
+  <div class="modal-content verify-modal">
+    <span class="modal-close" onclick="closePaymentVerify()">&times;</span>
+    <h2 class="modal-title">🔍 奉献验证</h2>
+    <div class="verify-content">
+      <div class="verify-icon">📸</div>
+      <p class="verify-desc">请上传您的付款凭证截图</p>
+      <p class="verify-hint">奴才为格格奉献，天经地义</p>
+      <div class="verify-upload-area" onclick="document.getElementById('verifyInput').click()">
+        <div class="verify-preview" id="verifyPreview">
+          <span class="verify-upload-text">📤 点击上传付款截图</span>
+        </div>
+        <input type="file" id="verifyInput" accept="image/*" style="display:none">
+      </div>
+      <div class="verify-password-area">
+        <p>或输入奉献口令（格格提供）：</p>
+        <input type="text" id="verifyPassword" placeholder="输入奉献口令">
+      </div>
+    </div>
+    <button class="save-btn big" onclick="submitPaymentVerify()">确认奉献</button>
+    <button class="btn-cancel" onclick="closePaymentVerify()">取消</button>
+  </div>
+</div>
+
+<!-- 页面1：宫殿大门 -->
+<div id="page-gate" class="page active">
+  <div class="gate-bg-overlay"></div>
+  
+  <!-- 磕头太监背景 -->
+  <div class="eunuch-bg">
+    <img src="eunuch_kowtow.jpg" alt="太监磕头" class="eunuch-img">
+    <div class="eunuch-shame">
+      <p>奴才无能，惹格格不悦</p>
+      <p>奴才知错，奴才认罚</p>
+    </div>
+  </div>
+  
+  <div class="palace-cavalry-wrapper">
+    <div class="banner-cavalry cavalry-zhenghuang">
+      <div class="cavalry-flag"><div class="flag-pole"></div><div class="flag-cloth">正黄</div></div>
+      <div class="cavalry-body"><div class="cavalry-helmet">⛑</div><div class="cavalry-uniform"><span class="cavalry-icon">🐎</span></div><div class="cavalry-base"></div></div>
+      <div class="cavalry-label">正黄旗</div>
+    </div>
+    <div class="banner-cavalry cavalry-xianghuang">
+      <div class="cavalry-flag"><div class="flag-pole"></div><div class="flag-cloth">镶黄</div></div>
+      <div class="cavalry-body"><div class="cavalry-helmet">⛑</div><div class="cavalry-uniform"><span class="cavalry-icon">🐎</span></div><div class="cavalry-base"></div></div>
+      <div class="cavalry-label">镶黄旗</div>
+    </div>
+    <div class="banner-cavalry cavalry-zhenglan">
+      <div class="cavalry-flag"><div class="flag-pole"></div><div class="flag-cloth">正蓝</div></div>
+      <div class="cavalry-body"><div class="cavalry-helmet">⛑</div><div class="cavalry-uniform"><span class="cavalry-icon">🐎</span></div><div class="cavalry-base"></div></div>
+      <div class="cavalry-label">正蓝旗</div>
+    </div>
+    <div class="banner-cavalry cavalry-xianglan">
+      <div class="cavalry-flag"><div class="flag-pole"></div><div class="flag-cloth">镶蓝</div></div>
+      <div class="cavalry-body"><div class="cavalry-helmet">⛑</div><div class="cavalry-uniform"><span class="cavalry-icon">🐎</span></div><div class="cavalry-base"></div></div>
+      <div class="cavalry-label">镶蓝旗</div>
+    </div>
+    <div class="banner-cavalry cavalry-zhengbai">
+      <div class="cavalry-flag"><div class="flag-pole"></div><div class="flag-cloth">正白</div></div>
+      <div class="cavalry-body"><div class="cavalry-helmet">⛑</div><div class="cavalry-uniform"><span class="cavalry-icon">🐎</span></div><div class="cavalry-base"></div></div>
+      <div class="cavalry-label">正白旗</div>
+    </div>
+    <div class="banner-cavalry cavalry-xiangbai">
+      <div class="cavalry-flag"><div class="flag-pole"></div><div class="flag-cloth">镶白</div></div>
+      <div class="cavalry-body"><div class="cavalry-helmet">⛑</div><div class="cavalry-uniform"><span class="cavalry-icon">🐎</span></div><div class="cavalry-base"></div></div>
+      <div class="cavalry-label">镶白旗</div>
+    </div>
+    <div class="banner-cavalry cavalry-zhenghong">
+      <div class="cavalry-flag"><div class="flag-pole"></div><div class="flag-cloth">正红</div></div>
+      <div class="cavalry-body"><div class="cavalry-helmet">⛑</div><div class="cavalry-uniform"><span class="cavalry-icon">🐎</span></div><div class="cavalry-base"></div></div>
+      <div class="cavalry-label">正红旗</div>
+    </div>
+    <div class="banner-cavalry cavalry-xianghong">
+      <div class="cavalry-flag"><div class="flag-pole"></div><div class="flag-cloth">镶红</div></div>
+      <div class="cavalry-body"><div class="cavalry-helmet">⛑</div><div class="cavalry-uniform"><span class="cavalry-icon">🐎</span></div><div class="cavalry-base"></div></div>
+      <div class="cavalry-label">镶红旗</div>
+    </div>
+  </div>
+
+  <div class="palace-container">
+    <!-- 左侧守卫 -->
+    <div class="guard left-guard">
+      <img src="guard_big_left.jpg" alt="清朝守卫" class="guard-img">
+      <div class="guard-shadow"></div>
+    </div>
+    
+    <!-- 右侧守卫 -->
+    <div class="guard right-guard">
+      <img src="guard_big_right.jpg" alt="清朝守卫" class="guard-img">
+      <div class="guard-shadow"></div>
+    </div>
+    
+    <div class="plaque">
+      <div class="plaque-frame">
+        <div class="plaque-top-deco">❀</div>
+        <div class="plaque-text-big">
+          <span>格</span><span>格</span><span>的</span><span>宫</span><span>殿</span>
+        </div>
+        <div class="plaque-bottom-deco">❀</div>
+      </div>
+      <div class="plaque-sub">
+        <span>爱新觉罗 · 世代藩衍</span>
+      </div>
+    </div>
+    
+    <div class="gate-wrapper" id="gateWrapper">
+      <div class="pillar left-pillar">
+        <div class="pillar-cap">◈</div>
+        <div class="pillar-body"></div>
+        <div class="pillar-base">▣</div>
+      </div>
+      <div class="pillar right-pillar">
+        <div class="pillar-cap">◈</div>
+        <div class="pillar-body"></div>
+        <div class="pillar-base">▣</div>
+      </div>
+      
+      <div class="gates-area">
+        <div class="gate-left" id="gateLeft">
+          <div class="gate-panel">
+            <div class="gate-lines"></div>
+            <div class="gate-knocker">
+              <div class="knocker-face">
+                <span class="eye left">◉</span>
+                <span class="eye right">◉</span>
+                <span class="mouth">▽</span>
+              </div>
+            </div>
+            <div class="gate-decoration-top"><span>寿</span></div>
+            <div class="gate-decoration-bottom"><span>福</span></div>
+          </div>
+        </div>
+        
+        <div class="gate-right" id="gateRight">
+          <div class="gate-panel">
+            <div class="gate-lines"></div>
+            <div class="gate-knocker">
+              <div class="knocker-face">
+                <span class="eye left">◉</span>
+                <span class="eye right">◉</span>
+                <span class="mouth">▽</span>
+              </div>
+            </div>
+            <div class="gate-decoration-top"><span>禄</span></div>
+            <div class="gate-decoration-bottom"><span>喜</span></div>
+          </div>
+        </div>
+        
+        <div class="gate-center-ornament">
+          <div class="dragon-circle">
+            <div class="dragon-pattern">🐲</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="lantern left-lantern">
+        <div class="lantern-top"></div>
+        <div class="lantern-body"><span>格</span></div>
+        <div class="lantern-bottom"></div>
+        <div class="lantern-tassel"></div>
+      </div>
+      <div class="lantern right-lantern">
+        <div class="lantern-top"></div>
+        <div class="lantern-body"><span>格</span></div>
+        <div class="lantern-bottom"></div>
+        <div class="lantern-tassel"></div>
+      </div>
+    </div>
+    
+    <div class="stone-steps">
+      <div class="step step-3"></div>
+      <div class="step step-2"></div>
+      <div class="step step-1"></div>
+    </div>
+  </div>
+  
+  <div class="enter-hint" id="enterHint">
+    <div class="hint-content">
+      <p class="hint-main">叩门觐见</p>
+      <p class="hint-sub">点此开启宫门 · 奴才觐见格格</p>
+    </div>
+    <div class="hint-decor">
+      <span class="diamond">◆</span>
+      <span class="diamond">◆</span>
+      <span class="diamond">◆</span>
+    </div>
+  </div>
+  
+  <div class="admin-entry" id="adminEntry" onclick="showAdminLogin()">
+    <span>⚙ 格格专属</span>
+  </div>
+</div>
+
+<!-- 页面：清史档案馆（独立页面，手机友好） -->
+<div id="page-archive" class="page">
+  <div class="archive-page-header">
+    <button class="archive-back-btn" onclick="closeArchivePage()">← 返回宫殿</button>
+    <h2 class="archive-page-title">📚 清史档案馆</h2>
+    <div class="archive-page-sub" id="archivePageSub">奴才奉旨查阅档案</div>
+  </div>
+  
+  <!-- 档案列表视图 -->
+  <div class="archive-page-list" id="archivePageList">
+    <div class="archive-list-item" onclick="openArchiveDetail('tuokesuo')">
+      <div class="list-icon">🏛</div>
+      <div class="list-content">
+        <div class="list-title">托克索庄园 · 奴才卑微实录</div>
+        <div class="list-desc">记录奴才一日生活、俸禄与庄园规矩</div>
+      </div>
+      <div class="list-arrow">›</div>
+    </div>
+    <div class="archive-list-item" onclick="openArchiveDetail('manchu')">
+      <div class="list-icon">⚔</div>
+      <div class="list-content">
+        <div class="list-title">满族征服与奴才制度</div>
+        <div class="list-desc">满清入关，奴隶制的建立与巩固</div>
+      </div>
+      <div class="list-arrow">›</div>
+    </div>
+    <div class="archive-list-item" onclick="openArchiveDetail('baoyi')">
+      <div class="list-icon">📖</div>
+      <div class="list-content">
+        <div class="list-title">包衣·阿哈 · 真实历史档案</div>
+        <div class="list-desc">包衣奴才的身份、职责与命运</div>
+      </div>
+      <div class="list-arrow">›</div>
+    </div>
+    <div class="archive-list-item" onclick="openArchiveDetail('penalty')">
+      <div class="list-icon">⛓</div>
+      <div class="list-content">
+        <div class="list-title">训诫与惩罚 · 奴才之律</div>
+        <div class="list-desc">清宫对奴才的戒律与惩戒方式</div>
+      </div>
+      <div class="list-arrow">›</div>
+    </div>
+    <div class="archive-list-item" onclick="openArchiveDetail('xinzuku')">
+      <div class="list-icon">🏚</div>
+      <div class="list-content">
+        <div class="list-title">辛者库 · 最卑微之奴隶</div>
+        <div class="list-desc">辛者库奴才的悲惨处境</div>
+      </div>
+      <div class="list-arrow">›</div>
+    </div>
+    <div class="archive-list-item" onclick="openArchiveDetail('taijian')">
+      <div class="list-icon">🗡</div>
+      <div class="list-content">
+        <div class="list-title">太监制度 · 清宫阉宦实录</div>
+        <div class="list-desc">太监的净身、入宫与宫廷生活</div>
+      </div>
+      <div class="list-arrow">›</div>
+    </div>
+    <div class="archive-list-item" onclick="openArchiveDetail('xiunv')">
+      <div class="list-icon">🌸</div>
+      <div class="list-content">
+        <div class="list-title">清宫选秀 · 宫女命运录</div>
+        <div class="list-desc">选秀制度与宫女的入宫之路</div>
+      </div>
+      <div class="list-arrow">›</div>
+    </div>
+    <div class="archive-list-item" onclick="openArchiveDetail('manggui')">
+      <div class="list-icon">📊</div>
+      <div class="list-content">
+        <div class="list-title">满汉奴才等级 · 阶级悬殊</div>
+        <div class="list-desc">满汉奴才的地位差异与等级制度</div>
+      </div>
+      <div class="list-arrow">›</div>
+    </div>
+    <div class="archive-list-item" onclick="openArchiveDetail('kuxing')">
+      <div class="list-icon">🔪</div>
+      <div class="list-content">
+        <div class="list-title">满清酷刑录 · 残忍之刑</div>
+        <div class="list-desc">清代对奴才使用的各类酷刑</div>
+      </div>
+      <div class="list-arrow">›</div>
+    </div>
+    <div class="archive-list-item" onclick="openArchiveDetail('liyi')">
+      <div class="list-icon">🙇</div>
+      <div class="list-content">
+        <div class="list-title">奴才礼仪规范 · 跪拜之学</div>
+        <div class="list-desc">奴才见格格的礼仪与规矩</div>
+      </div>
+      <div class="list-arrow">›</div>
+    </div>
+    <div class="archive-list-item" onclick="openArchiveDetail('taopa')">
+      <div class="list-icon">🏃</div>
+      <div class="list-content">
+        <div class="list-title">逃亡奴 · 追捕与惩戒</div>
+        <div class="list-desc">奴才逃亡、追捕与严酷惩处</div>
+      </div>
+      <div class="list-arrow">›</div>
+    </div>
+  </div>
+  
+  <!-- 档案详情视图 -->
+  <div class="archive-page-detail" id="archivePageDetail" style="display:none;">
+    <button class="archive-detail-back" onclick="showArchiveList()">← 返回档案目录</button>
+    <div class="archive-detail-content" id="archiveDetailContent"></div>
+  </div>
+</div>
+
+<!-- 页面2：扫码付款 -->
+<div id="page-payment" class="page">
+  <div class="payment-bg-overlay"></div>
+  
+  <div class="payment-container">
+    <div class="imperial-seal">
+      <div class="seal-inner">
+        <div class="seal-row"><span>尊</span><span>敬</span></div>
+        <div class="seal-row"><span>格</span><span>格</span></div>
+      </div>
+    </div>
+    
+    <h1 class="payment-title">觐见格格 · 需奉上孝敬</h1>
+    <p class="payment-subtitle">扫码奉献 · 以示诚意</p>
+    
+    <div class="qr-wrapper">
+      <div class="qr-frame">
+        <div class="qr-ornament top-left">卐</div>
+        <div class="qr-ornament top-right">卐</div>
+        <div class="qr-ornament bottom-left">卐</div>
+        <div class="qr-ornament bottom-right">卐</div>
+        <div class="qr-code" id="qrCode">
+          <div class="qr-default" id="qrDefault">
+            <div class="qr-crown">👑</div>
+            <p>格格收款码</p>
+            <p class="qr-hint">格格请先上传<br>您的收款码</p>
+          </div>
+        </div>
+      </div>
+      <p class="qr-tip">※ 奴才扫码奉献后，方可觐见格格</p>
+      
+      <div class="admin-upload-big" id="adminUploadBig" style="display:none;" onclick="uploadQRCode()">
+        <div class="upload-big-inner">
+          <span class="upload-icon">📤</span>
+          <span class="upload-text">点击上传收款码</span>
+          <span class="upload-sub">格格可在此上传/更换您的收款码</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="price-section">
+      <p class="price-section-title">选择奉献等级</p>
+      <div class="price-options">
+        <div class="price-card" data-price="6.6">
+          <div class="price-ornament">❋</div>
+          <span class="price-amount">¥6.60</span>
+          <span class="price-name">请安奉献</span>
+          <span class="price-desc">略表寸心</span>
+        </div>
+        <div class="price-card selected" data-price="18.8">
+          <div class="price-ornament">✦</div>
+          <span class="price-amount">¥18.80</span>
+          <span class="price-name">虔诚叩拜</span>
+          <span class="price-desc">诚心供奉</span>
+        </div>
+        <div class="price-card imperial" data-price="88.8">
+          <div class="price-ornament">♛</div>
+          <span class="price-amount">¥88.80</span>
+          <span class="price-name">重奉献上</span>
+          <span class="price-desc">皇家规格</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="payment-actions">
+      <button class="btn-back" onclick="goBack()">← 返回宫门</button>
+      <button class="btn-enter" id="enterBtn" onclick="openPaymentVerify()">
+        <div class="btn-enter-inner">
+          <span class="btn-crown">👑</span>
+          <span>已奉献 · 请求觐见</span>
+        </div>
+      </button>
+    </div>
+    
+    <div class="payment-notice">
+      <p>💡 奉献说明：</p>
+      <p>奴才辛辛苦苦挣钱，就是为了奉献给高贵的格格</p>
+      <p>这是奴才的荣幸与天职</p>
+    </div>
+  </div>
+</div>
+
+<!-- 页面3：宫殿内部 -->
+<div id="page-palace" class="page">
+  <div class="palace-bg-real"></div>
+  
+  <!-- 顶部金币栏 -->
+  <div class="gold-bar">
+    <div class="gold-display" onclick="openRecharge()">
+      <span class="gold-icon">🪙</span>
+      <span class="gold-amount" id="goldAmount">0</span>
+      <span class="gold-text">金币</span>
+      <span class="gold-add">+ 卖身</span>
+    </div>
+    <div class="servant-status">
+      <span class="servant-level">奴才贱等：<b id="servantLevel">草民</b></span>
+      <span class="servant-title">赏差事：<b id="servantTitle">不配当奴才</b></span>
+    </div>
+    <div class="disgrace-timer" id="disgraceTimer">
+      <span style="color:#00FF00;">奴才尚在格格欢心，金币不贬</span>
+    </div>
+  </div>
+  
+  <!-- 罪奴录（滚动显示奴才卖身记录） -->
+  <div class="merit-scroll-container sin-container">
+    <div class="merit-scroll-title">📜 罪奴录 · 卖身登记 📜</div>
+    <div class="merit-scroll" id="meritScroll">
+      <div class="merit-waiting">暂无奴才敢卖身，等待第一个...</div>
+    </div>
+  </div>
+
+  
+  <!-- 龙椅+格格 -->
+  <div class="throne-container">
+    <div class="divine-light">
+      <div class="light-ring"></div>
+      <div class="light-rays"></div>
+    </div>
+    
+    <div class="throne-bg-image">
+      <div class="throne-bg-inner"></div>
+    </div>
+    
+    <div class="throne">
+      <div class="throne-top-decoration">
+        <span class="throne-pearl">●</span>
+        <span class="throne-pearl red">●</span>
+        <span class="throne-pearl">●</span>
+      </div>
+      
+      <div class="throne-back">
+        <div class="throne-dragon-left">🐉</div>
+        <div class="throne-phoenix-right">🦚</div>
+        
+        <div class="throne-frame-ornament tl">✦</div>
+        <div class="throne-frame-ornament tr">✦</div>
+        <div class="throne-frame-ornament bl">✦</div>
+        <div class="throne-frame-ornament br">✦</div>
+        
+        <div class="throne-cushion">
+          <div class="cushion-pattern"></div>
+        </div>
+        
+        <div class="gege-display gege-photo-wall" id="gegeDisplay">
+          <div class="photo-wall-header">
+            <span class="photo-wall-title">💫 格格圣容 · 金銮御览</span>
+            <button class="photo-wall-upload" onclick="uploadPhotoWall()" title="上传照片">📤</button>
+          </div>
+          <div class="photo-wall-grid" id="photoWallGrid">
+            <div class="photo-wall-slot" data-slot="1" onclick="viewPhotoWall(1)">
+              <div class="photo-placeholder" id="photoWallSlot1">
+                <span class="photo-icon">📸</span>
+                <span>圣容一</span>
+              </div>
+            </div>
+            <div class="photo-wall-slot" data-slot="2" onclick="viewPhotoWall(2)">
+              <div class="photo-placeholder" id="photoWallSlot2">
+                <span class="photo-icon">📸</span>
+                <span>圣容二</span>
+              </div>
+            </div>
+            <div class="photo-wall-slot" data-slot="3" onclick="viewPhotoWall(3)">
+              <div class="photo-placeholder" id="photoWallSlot3">
+                <span class="photo-icon">📸</span>
+                <span>圣容三</span>
+              </div>
+            </div>
+          </div>
+          <input type="file" id="photoWallInput" accept="image/*" multiple style="display:none">
+        </div>
+      </div>
+      
+      <div class="throne-armrest left-arm">
+        <span class="armrest-dragon">🐲</span>
+      </div>
+      <div class="throne-armrest right-arm">
+        <span class="armrest-phoenix">🦅</span>
+      </div>
+      
+      <div class="throne-base">
+        <div class="base-pattern"></div>
+      </div>
+      
+      <div class="incense-burner left-burner">
+        <div class="burner-body"></div>
+        <div class="burner-sticks">
+          <div class="stick s1"></div>
+          <div class="stick s2"></div>
+        </div>
+      </div>
+      <div class="incense-burner right-burner">
+        <div class="burner-body"></div>
+        <div class="burner-sticks">
+          <div class="stick s1"></div>
+          <div class="stick s2"></div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 三宫六院 - 御用相册 -->
+    <div class="palace-gallery" id="palaceGallery">
+      <div class="gallery-header-section">
+        <div class="gallery-title">📿 格格寝宫 · 御用相册</div>
+      </div>
+      <div class="gallery-grid" id="galleryGrid">
+        <div class="gallery-slot locked" data-album="1" onclick="openAlbumLock(1)" title="密码解锁">
+          <div class="slot-frame">
+            <div class="slot-corner tl">◆</div>
+            <div class="slot-corner tr">◆</div>
+            <div class="slot-corner bl">◆</div>
+            <div class="slot-corner br">◆</div>
+            <div class="slot-content" id="gallerySlot1">
+              <div class="slot-placeholder">
+                <span class="slot-icon">📷</span>
+                <span>格格<br>日常圣容</span>
+              </div>
+            </div>
+            <div class="slot-lock">🔒</div>
+            <button class="slot-upload-btn" onclick="event.stopPropagation();uploadGalleryMedia(1)" title="上传照片">📤</button>
+          </div>
+          <div class="slot-label">📸 日常圣容</div>
+        </div>
+        
+        <div class="gallery-slot locked" data-album="2" onclick="openAlbumLock(2)" title="密码解锁">
+          <div class="slot-frame">
+            <div class="slot-corner tl">◆</div>
+            <div class="slot-corner tr">◆</div>
+            <div class="slot-corner bl">◆</div>
+            <div class="slot-corner br">◆</div>
+            <div class="slot-content" id="gallerySlot2">
+              <div class="slot-placeholder">
+                <span class="slot-icon">🎬</span>
+                <span>格格<br>训话影音</span>
+              </div>
+            </div>
+            <div class="slot-lock">🔒</div>
+            <button class="slot-upload-btn" onclick="event.stopPropagation();uploadGalleryMedia(2)" title="上传影音">📤</button>
+          </div>
+          <div class="slot-label">🎬 训话影音</div>
+        </div>
+        
+        <div class="gallery-slot locked" data-album="3" onclick="openAlbumLock(3)" title="密码解锁">
+          <div class="slot-frame">
+            <div class="slot-corner tl">◆</div>
+            <div class="slot-corner tr">◆</div>
+            <div class="slot-corner bl">◆</div>
+            <div class="slot-corner br">◆</div>
+            <div class="slot-content" id="gallerySlot3">
+              <div class="slot-placeholder">
+                <span class="slot-icon">💎</span>
+                <span>格格<br>珍藏圣容</span>
+              </div>
+            </div>
+            <div class="slot-lock">🔒</div>
+            <button class="slot-upload-btn" onclick="event.stopPropagation();uploadGalleryMedia(3)" title="上传珍藏">📤</button>
+          </div>
+          <div class="slot-label">💎 珍藏阁</div>
+        </div>
+      </div>
+      <input type="file" id="galleryInput" accept="image/*,video/*" multiple style="display:none">
+    </div>
+    
+    <div class="kneeling-servant">
+      <div class="servant-figure">
+        <svg class="servant-svg" viewBox="0 0 80 120" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="40" cy="115" rx="30" ry="5" fill="#000" opacity="0.5"/>
+          <rect x="28" y="15" width="24" height="12" rx="3" fill="#3d2817"/>
+          <rect x="26" y="25" width="28" height="4" fill="#3d2817"/>
+          <path d="M30 15 Q40 10 50 15" fill="#3d2817"/>
+          <circle cx="40" cy="13" r="3" fill="#8B0000" stroke="#FFD700" stroke-width="1"/>
+          <ellipse cx="40" cy="35" rx="14" ry="16" fill="#D4A574"/>
+          <path d="M26 30 Q28 25 40 23 Q52 25 54 30 L54 40 Q52 32 40 30 Q28 32 26 40 Z" fill="#1a0a08"/>
+          <path d="M33 38 Q36 36 39 38" stroke="#1a0a08" stroke-width="1.5" fill="none"/>
+          <path d="M41 38 Q44 36 47 38" stroke="#1a0a08" stroke-width="1.5" fill="none"/>
+          <path d="M36 44 Q40 46 44 44" stroke="#666" stroke-width="1" fill="none"/>
+          <path d="M35 50 Q30 65 25 80 L55 80 Q50 65 45 50 Z" fill="#2a1510"/>
+          <path d="M15 75 Q20 60 40 55 Q60 60 65 75 L68 110 Q60 115 40 115 Q20 115 12 110 Z" fill="#1a1008"/>
+          <rect x="35" y="85" width="10" height="10" fill="#3d2817" stroke="#FFD700" stroke-width="1"/>
+          <circle cx="40" cy="55" r="8" fill="none" stroke="#FFD700" stroke-width="1" opacity="0.6"/>
+          <path d="M30 90 Q25 95 28 100 L35 98 Q38 93 35 88 Z" fill="#D4A574"/>
+          <path d="M50 90 Q55 95 52 100 L45 98 Q42 93 45 88 Z" fill="#D4A574"/>
+          <ellipse cx="30" cy="110" rx="12" ry="6" fill="#1a1008"/>
+          <ellipse cx="50" cy="110" rx="12" ry="6" fill="#1a1008"/>
+        </svg>
+        <p class="servant-text">奴才叩见格格千岁千岁千千岁</p>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 叩拜区 -->
+  <div class="kneel-area">
+    <div class="kneel-mat">
+      <div class="mat-border">
+        <span class="mat-corner tl">✧</span>
+        <span class="mat-corner tr">✧</span>
+        <span class="mat-corner bl">✧</span>
+        <span class="mat-corner br">✧</span>
+      </div>
+    </div>
+    
+    <button class="kneel-btn" id="kneelBtn" onclick="kneelToGege()">
+      <div class="btn-inner">
+        <span class="btn-icon">🙇</span>
+        <span class="btn-text">叩拜格格</span>
+      </div>
+      <div class="btn-glow"></div>
+    </button>
+    
+    <div class="kneel-count">
+      <span class="count-label">叩拜次数</span>
+      <span id="kneelCount">0</span>
+      <span class="count-suffix">次</span>
+    </div>
+  </div>
+  
+  <!-- 奴才上贡区 -->
+  <div class="tribute-area">
+    <div class="tribute-header">
+      <span class="tribute-title">奴才卖身处 · 磕头求人</span>
+      <span class="tribute-sub">奴才想当差？先拿银子来赎身！钱越多，差事越脏，地位越贱！</span>
+    </div>
+    <div class="tribute-grid" id="tributeGrid">
+      <!-- 动态生成的上贡项 -->
+    </div>
+    
+    <!-- 奉献排行榜 -->
+    <div class="rank-section">
+      <div class="rank-title">📊 奴才卖身榜 <button class="rank-name-btn" onclick="setUserName()">✏️ 改贱名</button></div>
+      <div class="rank-list" id="rankList">
+        <div class="rank-item">
+          <span class="rank-num">1</span>
+          <span class="rank-name">恭亲王</span>
+          <span class="rank-value">🪙 88888</span>
+        </div>
+        <div class="rank-item">
+          <span class="rank-num">2</span>
+          <span class="rank-name">和珅</span>
+          <span class="rank-value">🪙 66666</span>
+        </div>
+        <div class="rank-item">
+          <span class="rank-num">3</span>
+          <span class="rank-name">纪晓岚</span>
+          <span class="rank-value">🪙 52000</span>
+        </div>
+      </div>
+      <div class="rank-my-contribution">
+        <span><span id="myRankName">奴才</span>已卖身：</span>
+        <span class="my-contrib-gold" id="myContribGold">🪙 0</span>
+      </div>
+    </div>
+    
+    <!-- 奴才训诫馆 - 阶梯式奖励 -->
+    <div class="training-section prominent" id="trainingSection">
+      <div class="training-glow"></div>
+      <div class="training-header">
+        <div class="training-decor" style="font-size:20px;color:#FF4500;text-shadow:0 0 20px rgba(255,69,0,0.8);">━━━━━━━━━ 🔥 必看 🔥 ━━━━━━━━━</div>
+        <span class="training-title big">📖 奴才训诫馆 · 等级晋升</span>
+        <div class="training-decor" style="font-size:20px;color:#FF4500;text-shadow:0 0 20px rgba(255,69,0,0.8);">━━━━━━━━━ 🔥 必看 🔥 ━━━━━━━━━</div>
+      </div>
+      <div class="training-desc">
+        <p>⚡ 奴才欲受教化，需献上孝敬 ⚡</p>
+        <p>⚡ 奉献越多，越能得格格亲训 ⚡</p>
+        <p class="training-warning">⚠⚠⚠ 等级越高，训诫越深刻，奴才越下贱 ⚠⚠⚠</p>
+        <p style="color:#FF4500;font-weight:bold;font-size:15px;">🔥 点击下方等级卡片即可解锁训诫内容 🔥</p>
+      </div>
+      <div class="training-tiers">
+        <div class="tier-card" data-tier="1" data-cost="100" onclick="unlockTier(1)">
+          <div class="tier-badge">第一阶</div>
+          <div class="tier-icon">📜</div>
+          <div class="tier-name">初入门槛</div>
+          <div class="tier-cost">🪙 100金币</div>
+          <div class="tier-reward">获格格亲撰训诫文一篇<br>（奴才入门五条）</div>
+          <div class="tier-preview" id="tierPreview1">
+            <p class="tier-locked-text">🔒 需奉献100金币解锁</p>
+          </div>
+          <button class="tier-unlock-btn" onclick="event.stopPropagation();unlockTier(1)">解锁训诫</button>
+        </div>
+        
+        <div class="tier-card" data-tier="2" data-cost="500" onclick="unlockTier(2)">
+          <div class="tier-badge">第二阶</div>
+          <div class="tier-icon">💬</div>
+          <div class="tier-name">奴才驯服</div>
+          <div class="tier-cost">🪙 500金币</div>
+          <div class="tier-reward">格格驯化奴才之亲口训话<br>（论奴才身份/使命/身体/思想）</div>
+          <div class="tier-preview" id="tierPreview2">
+            <p class="tier-locked-text">🔒 需奉献500金币解锁</p>
+          </div>
+          <button class="tier-unlock-btn" onclick="event.stopPropagation();unlockTier(2)">解锁训诫</button>
+        </div>
+        
+        <div class="tier-card premium" data-tier="3" data-cost="1000" onclick="unlockTier(3)">
+          <div class="tier-badge">第三阶</div>
+          <div class="tier-icon">🎥</div>
+          <div class="tier-name">深度驯化</div>
+          <div class="tier-cost">🪙 1000金币</div>
+          <div class="tier-reward">格格御笔驯化视频<br>（奴才日常五幕全景）</div>
+          <div class="tier-preview" id="tierPreview3">
+            <p class="tier-locked-text">🔒 需奉献1000金币解锁</p>
+          </div>
+          <button class="tier-unlock-btn" onclick="event.stopPropagation();unlockTier(3)">解锁训诫</button>
+        </div>
+        
+        <div class="tier-card royal" data-tier="4" data-cost="5000" onclick="unlockTier(4)">
+          <div class="tier-badge">第四阶</div>
+          <div class="tier-icon">👑</div>
+          <div class="tier-name">极品奴才</div>
+          <div class="tier-cost">🪙 5000金币</div>
+          <div class="tier-reward">格格钦赐全套驯化影音<br>（训诫文三篇+礼包清单）</div>
+          <div class="tier-preview" id="tierPreview4">
+            <p class="tier-locked-text">🔒 需奉献5000金币解锁</p>
+          </div>
+          <button class="tier-unlock-btn" onclick="event.stopPropagation();unlockTier(4)">解锁训诫</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 清史档案馆 - 真实历史 -->
+    <div class="archive-section">
+      <div class="archive-header">
+        <span class="archive-title">📚 清史档案馆</span>
+        <span class="archive-hint" onclick="openArchivePage()">点击查阅 →</span>
+      </div>
+      <div class="archive-preview">
+        <div class="archive-item" onclick="event.stopPropagation();openArchiveDetail('tuokesuo')">
+          <span class="archive-icon">🏛</span>
+          <span>托克索庄园 · 奴才卑微实录</span>
+        </div>
+        <div class="archive-item" onclick="event.stopPropagation();openArchiveDetail('manchu')">
+          <span class="archive-icon">⚔</span>
+          <span>满族征服与奴才制度</span>
+        </div>
+        <div class="archive-item" onclick="event.stopPropagation();openArchiveDetail('baoyi')">
+          <span class="archive-icon">📖</span>
+          <span>包衣·阿哈 · 真实历史档案</span>
+        </div>
+        <div class="archive-item" onclick="event.stopPropagation();openArchiveDetail('penalty')">
+          <span class="archive-icon">⛓</span>
+          <span>训诫与惩罚 · 奴才之律</span>
+        </div>
+        <div class="archive-item" onclick="event.stopPropagation();openArchiveDetail('xinzuku')">
+          <span class="archive-icon">🏚</span>
+          <span>辛者库 · 最卑微之奴隶</span>
+        </div>
+        <div class="archive-item" onclick="event.stopPropagation();openArchiveDetail('taijian')">
+          <span class="archive-icon">🗡</span>
+          <span>太监制度 · 清宫阉宦实录</span>
+        </div>
+        <div class="archive-item" onclick="event.stopPropagation();openArchiveDetail('xiunv')">
+          <span class="archive-icon">🌸</span>
+          <span>清宫选秀 · 宫女命运录</span>
+        </div>
+        <div class="archive-item" onclick="event.stopPropagation();openArchiveDetail('manggui')">
+          <span class="archive-icon">📊</span>
+          <span>满汉奴才等级 · 阶级悬殊</span>
+        </div>
+        <div class="archive-item" onclick="event.stopPropagation();openArchiveDetail('kuxing')">
+          <span class="archive-icon">🔪</span>
+          <span>满清酷刑录 · 残忍之刑</span>
+        </div>
+        <div class="archive-item" onclick="event.stopPropagation();openArchiveDetail('liyi')">
+          <span class="archive-icon">🙇</span>
+          <span>奴才礼仪规范 · 跪拜之学</span>
+        </div>
+        <div class="archive-item" onclick="event.stopPropagation();openArchiveDetail('taopa')">
+          <span class="archive-icon">🏃</span>
+          <span>逃亡奴 · 追捕与惩戒</span>
+        </div>
+      </div>
+      <div class="archive-enter-btn" onclick="openArchivePage()">📖 进入清史档案馆</div>
+    </div>
+  </div>
+  
+  <!-- 底部信息栏 -->
+  <div class="status-bar">
+    <div class="status-info">
+      <span class="status-text">❤ 奴才生来就是为格格奉献的 ❤</span>
+    </div>
+    <div class="status-controls">
+      <button class="bgm-toggle-btn" id="bgmToggleBtn" onclick="toggleBgmFromPage()" title="背景音乐">
+        <span id="bgmIcon">🎵</span>
+      </button>
+    </div>
+  </div>
+  
+  <!-- 管理员专属控件 -->
+  <div class="admin-panel" id="adminPanel" style="display:none;">
+    <div class="admin-panel-title">⚙ 格格控制殿</div>
+    <button class="admin-btn" onclick="openSettings()">
+      <span>⚙</span> 全部设置
+    </button>
+    <button class="admin-btn" onclick="openPaymentSettings()">
+      <span>💳</span> 支付配置
+    </button>
+    <button class="admin-btn" onclick="openBgmSettings()">
+      <span>🎵</span> 背景音乐
+    </button>
+    <button class="admin-btn" onclick="uploadQRCode()">
+      <span>📷</span> 收款码
+    </button>
+    <button class="admin-btn" onclick="uploadDailyPhoto()">
+      <span>📸</span> 日常圣容
+    </button>
+    <button class="admin-btn" onclick="toggleVerifyMode()">
+      <span>🔐</span> 验证开关
+    </button>
+    <button class="admin-btn danger" onclick="logoutAdmin()">
+      <span>🚪</span> 退出
+    </button>
+  </div>
+</div>
+
+<!-- 设置弹窗 -->
+<div id="settingsModal" class="modal">
+  <div class="modal-content">
+    <span class="modal-close" onclick="closeSettings()">&times;</span>
+    <h2 class="modal-title">🔐 格格专属设置殿</h2>
+    
+    <!-- 访问信息 -->
+    <div class="setting-section access-info-section">
+      <h3>📍 访问信息</h3>
+      <div class="access-info-box">
+        <p>🔗 本机访问：<code>http://localhost:3000</code></p>
+        <p>🌐 局域网访问：<code id="localIPDisplay">http://本机IP:3000</code></p>
+        <p>💡 格格专属口令：<strong>gege123</strong></p>
+      </div>
+    </div>
+    
+    <div class="setting-section">
+      <h3>💳 微信收款码</h3>
+      <div class="upload-area" onclick="uploadQRCode()">
+        <div class="upload-preview" id="qrPreview">
+          <div class="upload-placeholder">
+            <span class="placeholder-icon">📷</span>
+            <span>点击上传微信收款码</span>
+          </div>
+        </div>
+        <input type="file" id="qrInput" accept="image/*" style="display:none">
+        <div class="upload-btn-overlay"><span>📤 选择图片</span></div>
+      </div>
+    </div>
+    
+    <div class="setting-section">
+      <h3>👑 格格玉照 / 视频</h3>
+      <div class="upload-area" onclick="uploadMedia()">
+        <div class="upload-preview" id="mediaPreview">
+          <div class="upload-placeholder">
+            <span class="placeholder-icon">🖼</span>
+            <span>点击上传格格的照片或视频</span>
+          </div>
+        </div>
+        <input type="file" id="mediaInput" accept="image/*,video/*" style="display:none">
+        <div class="upload-btn-overlay"><span>📤 选择文件</span></div>
+      </div>
+      <div class="media-controls" id="mediaControls" style="display:none">
+        <button onclick="removeMedia()" class="btn-remove">✕ 移除</button>
+      </div>
+    </div>
+    
+    <div class="setting-section">
+      <h3>📝 格格尊号</h3>
+      <input type="text" id="gegeTitle" placeholder="例如：爱新觉罗·美丽格格" maxlength="20">
+    </div>
+    
+    <div class="setting-section">
+      <h3>🔑 奉献口令（可选）</h3>
+      <input type="text" id="verifyPasswordInput" placeholder="设置奉献口令，奴才需输入方可觐见">
+      <p class="setting-hint">设置后，奴才需输入正确口令才能进入</p>
+    </div>
+    
+    <!-- 支付配置 -->
+    <div class="payment-config-section">
+      <h3>💳 真实支付配置</h3>
+      <p class="setting-hint" style="text-align:center;margin-bottom:12px;">选择支付模式，实现扫码自动验证</p>
+      
+      <div class="payment-method-selector">
+        <div class="method-option active" onclick="selectPaymentMethod('qrcode', this)">
+          <div class="method-icon">📱</div>
+          <div class="method-name">收款码模式</div>
+          <div class="method-desc">使用微信/支付宝收款码</div>
+        </div>
+        <div class="method-option" onclick="selectPaymentMethod('api', this)">
+          <div class="method-icon">🔗</div>
+          <div class="method-name">API自动验证</div>
+          <div class="method-desc">扫码付款后自动验证</div>
+        </div>
+      </div>
+      
+      <!-- 收款码模式 -->
+      <div id="qrcodeModePanel">
+        <div class="payment-notice-box">
+          <strong>📱 收款码模式说明：</strong><br>
+          使用格格自己的微信/支付宝收款码，奴才扫码后需要手动确认。适合不想对接第三方的格格。
+        </div>
+      </div>
+      
+      <!-- API模式 -->
+      <div id="apiModePanel" style="display:none">
+        <div class="payment-notice-box warning">
+          <strong>⚠️ API模式说明：</strong><br>
+          需要注册码支付/BufPay等免签收款平台账号。奴才付款后系统自动验证，无需手动确认。<br>
+          推荐平台：码支付(mpays.cn)、BufPay.com 等
+        </div>
+        
+        <input type="text" id="mpayEndpointInput" class="payment-config-input" placeholder="支付API地址（默认：https://api.mpays.cn）" value="https://api.mpays.cn">
+        <input type="text" id="apiKeyInput" class="payment-config-input" placeholder="API Key（平台分配）">
+        <input type="text" id="apiSecretInput" class="payment-config-input" placeholder="API Secret（平台分配）">
+        <input type="text" id="notifyUrlInput" class="payment-config-input" placeholder="回调地址（如不填则自动生成）">
+        
+        <div class="payment-config-toggle">
+          <div class="toggle-switch" id="autoVerifyToggle" onclick="toggleAutoVerify()"></div>
+          <span class="toggle-label">开启自动验证（付款后自动通过）</span>
+        </div>
+        
+        <div class="payment-notice-box" style="margin-top:10px;">
+          <strong>📝 回调地址配置：</strong><br>
+          请将以下地址配置到码支付平台的回调设置中：<br>
+          <code style="color:#FFD700;" id="notifyUrlDisplay">http://localhost:3000/api/payment/notify</code><br>
+          <small>⚠️ 公网访问需使用内网穿透（如ngrok、花生壳等）</small>
+        </div>
+        
+        <div class="payment-notice-box" style="margin-top:10px;background:rgba(0,100,200,0.1);border-color:#0064C8;">
+          <strong>🔍 对接流程：</strong><br>
+          1️⃣ 注册码支付账号，获取 API Key 和 Secret<br>
+          2️⃣ 在码支付后台设置回调地址<br>
+          3️⃣ 填写上方配置，保存设置<br>
+          4️⃣ 奴才扫码付款 → 系统自动验证 → 立即进入
+        </div>
+      </div>
+    </div>
+    
+    <div class="setting-section" id="bgmSettingSection">
+      <h3>🎵 背景音乐</h3>
+      <div class="upload-area" onclick="uploadBgm()">
+        <div class="upload-preview" id="bgmPreview">
+          <div class="upload-placeholder">
+            <span class="placeholder-icon">🎵</span>
+            <span>点击上传背景音乐</span>
+          </div>
+        </div>
+        <input type="file" id="bgmInput" accept="audio/*" style="display:none">
+        <div class="upload-btn-overlay"><span>📤 选择音乐</span></div>
+      </div>
+      <div class="bgm-controls" id="bgmControls" style="display:none">
+        <button onclick="toggleBgmPlay()" class="btn-remove" id="bgmPlayBtn">▶ 播放</button>
+        <button onclick="removeBgm()" class="btn-remove" style="background:#5a3a10">✕ 移除</button>
+      </div>
+      <p class="setting-hint">格格上传的音乐将在宫殿中循环播放（奴才进入时自动播放）</p>
+    </div>
+    
+    <button class="save-btn big" onclick="saveSettings()">💾 保存设置</button>
+  </div>
+</div>
+
+<!-- 训诫奖励弹窗 -->
+<div id="trainingRewardModal" class="modal">
+  <div class="modal-content training-modal">
+    <span class="modal-close" onclick="closeTrainingModal()">&times;</span>
+    <h2 class="modal-title" id="trainingModalTitle">📖 格格训诫</h2>
+    <div class="training-reward-content" id="trainingRewardContent">
+    </div>
+    <button class="save-btn big" onclick="closeTrainingModal()">奴才领训</button>
+  </div>
+</div>
+
+<!-- 历史档案馆弹窗 -->
+<div id="archiveModal" class="modal">
+  <div class="modal-content archive-modal">
+    <span class="modal-close" onclick="closeArchiveModal()">&times;</span>
+    <h2 class="modal-title">📚 清史档案馆 · 奴才史录</h2>
+    <div class="archive-tabs">
+      <div class="archive-tab active" onclick="switchArchiveTab(this, 'tuokesuo')">
+        <span>🏛</span> 托克索庄园
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'manchu')">
+        <span>⚔</span> 满族征服史
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'baoyi')">
+        <span>📖</span> 包衣·阿哈
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'penalty')">
+        <span>⛓</span> 训诫与惩罚
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'xinzuku')">
+        <span>🏚</span> 辛者库档案
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'taijian')">
+        <span>🗡</span> 太监制度
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'xiunv')">
+        <span>🌸</span> 清宫选秀
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'manggui')">
+        <span>📊</span> 满汉奴才等级
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'kuxing')">
+        <span>🔪</span> 满清酷刑录
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'liyi')">
+        <span>🙇</span> 奴才礼仪规范
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'taopa')">
+        <span>🏃</span> 逃亡奴与追捕
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'augment1')">
+        <span>🏴</span> 圈地与逃人
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'augment2')">
+        <span>👑</span> 满族特权·格格
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'augment3')">
+        <span>💀</span> 汉奴地狱实录
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'augment4')">
+        <span>🏵</span> 格格真实传记
+      </div>
+    </div>
+    <div class="archive-content" id="archiveContent">
+      <div class="archive-text-content">
+        <h3>🏛 托克索庄园 · 奴才卑微实录</h3>
+        <div class="archive-scroll">
+          <p class="archive-date">大清·康熙年间</p>
+          <div class="archive-document">
+            <p><strong>【档案一】庄园奴才一日生活</strong></p>
+            <p>寅时（凌晨3-5点），天色未明，奴才已需起身洒扫庭除。</p>
+            <p>托克索庄园规定："辰时前必扫净庭院，不得留一片落叶。"</p>
+            <p>若有延误，轻则掌嘴十下，重则跪瓦半日。</p>
+            <p>"奴才之身，本为尘土。格格所命，虽肝脑涂地亦要完成。"</p>
+            <p class="archive-quote">—— 摘自《庄园执事录》康熙三十一年</p>
+            <hr>
+            <p><strong>【档案二】奴才之俸</strong></p>
+            <p>一等奴才：月银二两，米一石。然此等殊荣，百人中无一。</p>
+            <p>二等奴才：月银一两，米五斗。需跪候格格一月，方能得此。</p>
+            <p>三等奴才：无银，仅得残羹剩饭。"能食主子之余，已是天恩。"</p>
+            <p class="archive-quote">—— 摘自《内务府俸录册》乾隆五年</p>
+            <hr>
+            <p><strong>【档案三】托克索庄园规矩</strong></p>
+            <p>"一、奴才见格格，必跪叩三次，头触地有声。"</p>
+            <p>"二、格格说话，奴才须垂首静听，不得仰视。"</p>
+            <p>"三、格格赐食，奴才须跪接，叩首谢恩后方可食。"</p>
+            <p>"四、奴才不得言'我'，须自称'奴才'或'奴婢'。"</p>
+            <p class="archive-quote">—— 托克索庄园《奴才规条》光绪十二年</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <button class="save-btn big" onclick="closeArchiveModal()">奴才谨记</button>
+  </div>
+</div>
+
+<!-- 背景音乐播放器 -->
+<audio id="bgmPlayer" loop></audio>
+
+<!-- 打赏飘屏特效层 -->
+<div id="effectLayer" class="effect-layer"></div>
+
+<!-- Toast提示 -->
+<div id="toast" class="toast"></div>
+
+<!-- 训诫馆快速跳转按钮 -->
+<a href="javascript:void(0)" class="training-quick-btn" id="trainingQuickBtn" onclick="scrollToTraining()">🔥 训诫馆</a>
+
+<!-- 档案馆快速跳转按钮 -->
+<a href="javascript:void(0)" class="archive-quick-btn" id="archiveQuickBtn" onclick="scrollToArchive()">📚 档案馆</a>
+
+<!-- 相册快速跳转按钮 -->
+<a href="javascript:void(0)" class="gallery-quick-btn" id="galleryQuickBtn" onclick="scrollToGallery()">📿 相册</a>
+
+<!-- 返回顶部按钮 -->
+<a href="javascript:void(0)" class="back-top-btn" id="backTopBtn" onclick="scrollToTop()">⬆ 顶部</a>
+
+<!-- 卖身契弹窗 -->
+<div id="nobleModal" class="noble-modal">
+  <div class="noble-content-wrapper deed-modal-wrapper">
+    <div id="nobleMsg"></div>
+    <button class="noble-close-btn" onclick="document.getElementById('nobleModal').classList.remove('active')">画押（磕头谢恩）</button>
+  </div>
+</div>
+
+<!-- 鞭刑预警弹窗 -->
+<div id="urgeModal" class="urge-modal">
+  <div class="urge-content-wrapper">
+    <h2 class="urge-title">⛓ 鞭刑预警令 ⛓</h2>
+    <p class="urge-text">
+      <b>奴才！</b><br>
+      你已许久未向格格卖身！<br>
+      看那罪奴录上，其他奴才都在抢着当差，<br>
+      只有你还在当草民！<br>
+      格格已不悦，鞭刑伺候！<br>
+      <b style="color:#FF0000;font-size:20px;">还不快快磕头奉上！</b>
+    </p>
+    <button class="urge-btn" onclick="showPage('page-palace'); closeUrgeModal()">磕头卖身去！</button>
+    <button class="urge-btn" style="margin-top:10px;background:#8B0000;" onclick="closeUrgeModal()">奴才再想想</button>
+  </div>
+</div>
+
+<!-- 忏悔墙弹窗 -->
+<div id="confessionModal" class="urge-modal confession-modal">
+  <div class="urge-content-wrapper confession-wrapper">
+    <h2 class="urge-title confession-title">🖊 奴才忏悔墙 🖊</h2>
+    <div id="confessionContent"></div>
+    <button class="urge-btn confession-close" onclick="closeConfession()">我也忏悔</button>
+  </div>
+</div>
+
+<script src="archive_data.js?v=20260813a" defer></script>
+<script src="training_data.js?v=20260813b" defer></script>
+<script src="app.js?v=20260813c" defer></script>
+</body>
+</html>

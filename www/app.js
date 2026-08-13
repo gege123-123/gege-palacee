@@ -892,32 +892,38 @@ function showPage(pageId) {
   updateTrainingQuickBtn();
 
   var bgmPlayer = document.getElementById('bgmPlayer');
-  if (bgmPlayer && state.bgmData && pageId === 'page-palace') {
+  if (bgmPlayer && state.bgmData) {
     if (!state.isPlaying) {
       var tryPlay = function() {
         if (bgmPlayer && !state.isPlaying) {
-          bgmPlayer.play().then(function() {
-            state.isPlaying = true;
-            var bgmIcon = document.getElementById('bgmIcon');
-            if (bgmIcon) bgmIcon.textContent = '🎶';
-          }).catch(function() {
-            var handler = function() {
-              if (bgmPlayer && !state.isPlaying) {
-                bgmPlayer.play().then(function() {
-                  state.isPlaying = true;
-                  var bgmIcon = document.getElementById('bgmIcon');
-                  if (bgmIcon) bgmIcon.textContent = '🎶';
-                }).catch(function() {});
-              }
-              document.removeEventListener('touchstart', handler);
-              document.removeEventListener('click', handler);
-            };
-            document.addEventListener('touchstart', handler, { once: true, passive: true });
-            document.addEventListener('click', handler, { once: true });
-          });
+          var playPromise = bgmPlayer.play();
+          if (playPromise !== undefined) {
+            playPromise.then(function() {
+              state.isPlaying = true;
+              var bgmIcon = document.getElementById('bgmIcon');
+              if (bgmIcon) bgmIcon.textContent = '🎶';
+            }).catch(function() {
+              // 手机浏览器阻止自动播放，等待用户交互
+              var handler = function() {
+                if (bgmPlayer && !state.isPlaying) {
+                  bgmPlayer.play().then(function() {
+                    state.isPlaying = true;
+                    var bgmIcon = document.getElementById('bgmIcon');
+                    if (bgmIcon) bgmIcon.textContent = '🎶';
+                  }).catch(function() {});
+                }
+                document.removeEventListener('touchstart', handler);
+                document.removeEventListener('click', handler);
+                document.removeEventListener('touchstart', handler);
+                document.removeEventListener('click', handler);
+              };
+              document.addEventListener('touchstart', handler, { once: true, passive: true });
+              document.addEventListener('click', handler, { once: true });
+            });
+          }
         }
       };
-      setTimeout(tryPlay, 800);
+      setTimeout(tryPlay, 300);
     }
   }
 }

@@ -1,5 +1,128 @@
 // ============ 格格的宫殿 · 纯前端版本 ============
 
+// ============ GitHub 存储配置 ============
+var GITHUB_CONFIG = {
+  owner: 'gege123-123',
+  repo: 'gege-palacee',
+  branch: 'main',
+  token: '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',
+  imagesDir: 'images',
+  dataDir: 'data'
+};
+
+// ============ GitHub API 功能 ============
+
+// 将 base64 图片转换为 Blob
+function base64ToBlob(base64, mime) {
+  var byteChars = atob(base64.split(',')[1]);
+  var byteNumbers = new Array(byteChars.length);
+  for (var i = 0; i < byteChars.length; i++) {
+    byteNumbers[i] = byteChars.charCodeAt(i);
+  }
+  var byteArray = new Uint8Array(byteNumbers);
+  return new Blob([byteArray], { type: mime });
+}
+
+// 获取图片扩展名
+function getExtension(mimeType) {
+  var map = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'video/mp4': 'mp4',
+    'video/webm': 'webm'
+  };
+  return map[mimeType] || 'jpg';
+}
+
+// 上传文件到 GitHub
+function uploadToGitHub(filePath, content, message) {
+  var encodedContent = btoa(unescape(encodeURIComponent(content)));
+  
+  return new Promise(function(resolve, reject) {
+    // 先尝试获取现有文件的 SHA（用于更新）
+    fetch('https://api.github.com/repos/' + GITHUB_CONFIG.owner + '/' + GITHUB_CONFIG.repo + '/contents/' + filePath, {
+      headers: {
+        'Authorization': 'token ' + GITHUB_CONFIG.token,
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+      var sha = data.sha || null;
+      return fetch('https://api.github.com/repos/' + GITHUB_CONFIG.owner + '/' + GITHUB_CONFIG.repo + '/contents/' + filePath, {
+        method: 'PUT',
+        headers: {
+          'Authorization': 'token ' + GITHUB_CONFIG.token,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: message || 'Upload ' + filePath,
+          content: encodedContent,
+          branch: GITHUB_CONFIG.branch,
+          sha: sha
+        })
+      });
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+      if (data.content) {
+        resolve(data.content.download_url || 'https://raw.githubusercontent.com/' + GITHUB_CONFIG.owner + '/' + GITHUB_CONFIG.repo + '/' + GITHUB_CONFIG.branch + '/' + filePath);
+      } else {
+        reject(data);
+      }
+    })
+    .catch(function(err) { reject(err); });
+  });
+}
+
+// 从 GitHub 获取 JSON 数据
+function fetchFromGitHub(filePath) {
+  return new Promise(function(resolve, reject) {
+    fetch('https://raw.githubusercontent.com/' + GITHUB_CONFIG.owner + '/' + GITHUB_CONFIG.repo + '/' + GITHUB_CONFIG.branch + '/' + filePath)
+      .then(function(response) {
+        if (!response.ok) throw new Error('File not found');
+        return response.json();
+      })
+      .then(function(data) { resolve(data); })
+      .catch(function(err) { reject(err); });
+  });
+}
+
+// 保存 JSON 数据到 GitHub
+function saveToGitHub(filePath, data, message) {
+  return uploadToGitHub(filePath, JSON.stringify(data, null, 2), message);
+}
+
+// 上传图片文件
+function uploadImageFile(file, directory) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function(event) {
+      var dataUrl = event.target.result;
+      var mime = file.type;
+      var ext = getExtension(mime);
+      var fileName = Date.now() + '_' + Math.random().toString(36).substr(2, 8) + '.' + ext;
+      var filePath = GITHUB_CONFIG.imagesDir + '/' + directory + '/' + fileName;
+      
+      uploadToGitHub(filePath, dataUrl, 'Upload ' + file.name)
+        .then(function(url) {
+          resolve({
+            url: url,
+            type: mime.indexOf('video') === 0 ? 'video' : 'image',
+            name: file.name,
+            path: filePath
+          });
+        })
+        .catch(function(err) { reject(err); });
+    };
+    reader.onerror = function() { reject(new Error('File read error')); };
+    reader.readAsDataURL(file);
+  });
+}
+
 var state = {
   kneelCount: 0,
   selectedPrice: 18.8,
@@ -2031,22 +2154,29 @@ function openAlbumLock(albumId) {
   }
 }
 
-function openAlbumViewer(albumId) {
-  var photos = null;
-  try { photos = JSON.parse(localStorage.getItem('gege_gallery_photos_' + albumId)) || []; } catch(e) { photos = []; }
+async function openAlbumViewer(albumId) {
+  var photos = [];
+  try {
+    photos = await fetchFromGitHub(GITHUB_CONFIG.dataDir + '/gallery_' + albumId + '.json');
+  } catch(e) {
+    try { photos = JSON.parse(localStorage.getItem('gege_gallery_photos_' + albumId)) || []; } catch(e2) { photos = []; }
+  }
+  
   if (photos.length === 0) { showToast('此相册暂无内容，待格格上传'); return; }
+  
   var isVideoAlbum = photos.some(function(p) { return p.type === 'video'; });
   var content = '';
   if (isVideoAlbum && photos.length === 1) {
-    content = '<video src="' + photos[0].data + '" controls autoplay style="max-width:90vw;max-height:80vh;"></video>';
+    content = '<video src="' + (photos[0].url || photos[0].data) + '" controls autoplay style="max-width:90vw;max-height:80vh;"></video>';
   } else {
     var gridClass = isVideoAlbum ? 'video-viewer-grid' : 'photo-viewer-grid';
     content = '<div class="' + gridClass + '">';
     for (var i = 0; i < photos.length; i++) {
+      var src = photos[i].url || photos[i].data;
       if (photos[i].type === 'video') {
-        content += '<video src="' + photos[i].data + '" controls style="max-width:90vw;max-height:80vh;margin:10px auto;"></video>';
+        content += '<video src="' + src + '" controls style="max-width:90vw;max-height:80vh;margin:10px auto;"></video>';
       } else {
-        content += '<img src="' + photos[i].data + '" style="max-width:90vw;max-height:80vh;margin:10px auto;border-radius:10px;cursor:pointer;">';
+        content += '<img src="' + src + '" style="max-width:90vw;max-height:80vh;margin:10px auto;border-radius:10px;cursor:pointer;">';
       }
     }
     content += '</div>';
@@ -2076,14 +2206,19 @@ function openAlbumAdmin(albumId) {
   uploadGalleryMedia(albumId);
 }
 
-function clearGalleryPhotos(albumId) {
+async function clearGalleryPhotos(albumId) {
   if (!state.isAdmin) { showToast('请格格先登录控制殿'); return; }
   if (confirm('确定要清空此相册的所有照片吗？')) {
-    localStorage.removeItem('gege_gallery_photos_' + albumId);
-    localStorage.removeItem('gege_gallery_cover_' + albumId);
-    localStorage.removeItem('gege_gallery_cover_type_' + albumId);
-    loadGallerySlots();
-    showToast('相册已清空');
+    var dataFile = GITHUB_CONFIG.dataDir + '/gallery_' + albumId + '.json';
+    try {
+      await saveToGitHub(dataFile, [], 'Clear album ' + albumId);
+      localStorage.removeItem('gege_gallery_photos_' + albumId);
+      loadGallerySlots();
+      showToast('相册已清空');
+    } catch(err) {
+      console.error('清空失败:', err);
+      showToast('清空失败，请重试');
+    }
   }
 }
 
@@ -2100,71 +2235,100 @@ function uploadGalleryMedia(slotIndex) {
 
 var galleryInput = document.getElementById('galleryInput');
 if (galleryInput) {
-  galleryInput.addEventListener('change', function(e) {
+  galleryInput.addEventListener('change', async function(e) {
     var files = e.target.files;
     if (!files || files.length === 0) return;
     var albumId = gallerySlotIndex;
-    var existingData = null;
-    try { existingData = JSON.parse(localStorage.getItem('gege_gallery_photos_' + albumId)) || []; } catch(e) { existingData = []; }
-    var processed = 0;
-    var newPhotos = [];
-    for (var i = 0; i < files.length; i++) {
-      (function(file) {
-        var reader = new FileReader();
-        reader.onload = function(event) {
-          var dataUrl = event.target.result;
-          var type = file.type.indexOf('video') === 0 ? 'video' : 'image';
-          newPhotos.push({ data: dataUrl, type: type, name: file.name });
-          processed++;
-          if (processed === files.length) {
-            var allPhotos = existingData.concat(newPhotos);
-            localStorage.setItem('gege_gallery_photos_' + albumId, JSON.stringify(allPhotos));
-            localStorage.setItem('gege_gallery_cover_' + albumId, newPhotos[0].data);
-            localStorage.setItem('gege_gallery_cover_type_' + albumId, newPhotos[0].type);
-            var slotId = 'gallerySlot' + albumId;
-            var slot = document.getElementById(slotId);
-            if (slot && newPhotos.length > 0) {
-              var cover = newPhotos[0];
-              if (cover.type === 'video') {
-                slot.innerHTML = '<video src="' + cover.data + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></video>';
-              } else {
-                slot.innerHTML = '<img src="' + cover.data + '" alt="格格相册' + albumId + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">';
-              }
-            }
-            showToast('上传成功！共' + allPhotos.length + '张');
-          }
-        };
-        reader.readAsDataURL(file);
-      })(files[i]);
+    var dataFile = GITHUB_CONFIG.dataDir + '/gallery_' + albumId + '.json';
+    
+    showToast('正在上传到云端...');
+    
+    try {
+      var existingPhotos = [];
+      try {
+        existingPhotos = await fetchFromGitHub(dataFile);
+      } catch(e) { /* 空相册 */ }
+      
+      var newPhotos = [];
+      for (var i = 0; i < files.length; i++) {
+        try {
+          var result = await uploadImageFile(files[i], 'gallery_' + albumId);
+          newPhotos.push(result);
+        } catch(err) {
+          console.error('上传失败:', files[i].name, err);
+        }
+      }
+      
+      var allPhotos = existingPhotos.concat(newPhotos);
+      await saveToGitHub(dataFile, allPhotos, 'Update album ' + albumId);
+      
+      var slotId = 'gallerySlot' + albumId;
+      var slot = document.getElementById(slotId);
+      if (slot && newPhotos.length > 0) {
+        var cover = newPhotos[0];
+        if (cover.type === 'video') {
+          slot.innerHTML = '<video src="' + cover.url + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></video>';
+        } else {
+          slot.innerHTML = '<img src="' + cover.url + '" alt="格格相册' + albumId + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">';
+        }
+      }
+      
+      // 同时保存到 localStorage 作为缓存
+      localStorage.setItem('gege_gallery_photos_' + albumId, JSON.stringify(allPhotos));
+      showToast('上传成功！共' + allPhotos.length + '张');
+    } catch(err) {
+      console.error('上传错误:', err);
+      showToast('上传失败，请重试');
     }
+    
     galleryInput.value = '';
   });
 }
 
-function loadGallerySlots() {
+async function loadGallerySlots() {
   for (var i = 1; i <= 3; i++) {
-    var photos = null;
-    try { photos = JSON.parse(localStorage.getItem('gege_gallery_photos_' + i)) || []; } catch(e) { photos = []; }
+    var photos = [];
+    try {
+      photos = await fetchFromGitHub(GITHUB_CONFIG.dataDir + '/gallery_' + i + '.json');
+    } catch(e) {
+      // 尝试从 localStorage 读取旧数据
+      try { photos = JSON.parse(localStorage.getItem('gege_gallery_photos_' + i)) || []; } catch(e2) { photos = []; }
+    }
+    
     var slot = document.getElementById('gallerySlot' + i);
     if (photos.length > 0 && slot) {
       var cover = photos[0];
+      var imgSrc = cover.url || cover.data;
       if (cover.type === 'video') {
-        slot.innerHTML = '<video src="' + cover.data + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></video>';
+        slot.innerHTML = '<video src="' + imgSrc + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></video>';
       } else {
-        slot.innerHTML = '<img src="' + cover.data + '" alt="格格相册' + i + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">';
+        slot.innerHTML = '<img src="' + imgSrc + '" alt="格格相册' + i + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">';
       }
+      localStorage.setItem('gege_gallery_photos_' + i, JSON.stringify(photos));
     }
   }
 }
 
 // ============ 照片墙功能 - 日常圣容 ============
 
-function loadPhotoWall() {
+async function loadPhotoWall() {
+  var wallData = [];
+  try {
+    wallData = await fetchFromGitHub(GITHUB_CONFIG.dataDir + '/photo_wall.json');
+  } catch(e) {
+    // 从 localStorage 读取旧数据
+    for (var i = 1; i <= 3; i++) {
+      var oldData = localStorage.getItem('gege_photo_wall_' + i);
+      if (oldData) wallData.push({ url: oldData, slot: i });
+    }
+  }
+  
   for (var i = 1; i <= 3; i++) {
-    var data = localStorage.getItem('gege_photo_wall_' + i);
     var slot = document.getElementById('photoWallSlot' + i);
-    if (data && slot) {
-      slot.innerHTML = '<img src="' + data + '" alt="圣容' + i + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;">';
+    var photo = wallData.find(function(p) { return p.slot === i; });
+    if (photo && slot) {
+      var src = photo.url || photo.data;
+      slot.innerHTML = '<img src="' + src + '" alt="圣容' + i + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;">';
       slot.style.cursor = 'pointer';
     }
   }
@@ -2179,41 +2343,61 @@ function uploadPhotoWall() {
   }
 }
 
-function handlePhotoWallUpload(e) {
+async function handlePhotoWallUpload(e) {
   var files = e.target.files;
   if (!files || files.length === 0) return;
   
-  var uploaded = [];
-  var processed = 0;
   var targetCount = Math.min(files.length, 3);
   
-  for (var i = 0; i < targetCount; i++) {
-    (function(file, index) {
-      var reader = new FileReader();
-      reader.onload = function(event) {
-        var dataUrl = event.target.result;
-        uploaded[index] = dataUrl;
-        processed++;
-        if (processed === targetCount) {
-          for (var j = 0; j < targetCount; j++) {
-            if (uploaded[j]) {
-              localStorage.setItem('gege_photo_wall_' + (j + 1), uploaded[j]);
-            }
-          }
-          loadPhotoWall();
-          syncDailyAlbumToWall();
-          showToast('照片上传成功！共' + targetCount + '张');
+  showToast('正在上传到云端...');
+  
+  try {
+    var wallData = [];
+    try {
+      wallData = await fetchFromGitHub(GITHUB_CONFIG.dataDir + '/photo_wall.json');
+    } catch(e) { /* 空 */ }
+    
+    for (var i = 0; i < targetCount; i++) {
+      try {
+        var result = await uploadImageFile(files[i], 'photo_wall');
+        // 保留原有属性，添加 slot
+        var existingIndex = wallData.findIndex(function(p) { return p.slot === i + 1; });
+        if (existingIndex >= 0) {
+          wallData[existingIndex] = { url: result.url, type: result.type, name: result.name, slot: i + 1 };
+        } else {
+          wallData.push({ url: result.url, type: result.type, name: result.name, slot: i + 1 });
         }
-      };
-      reader.readAsDataURL(file);
-    })(files[i], i);
+      } catch(err) {
+        console.error('上传失败:', files[i].name, err);
+      }
+    }
+    
+    await saveToGitHub(GITHUB_CONFIG.dataDir + '/photo_wall.json', wallData, 'Update photo wall');
+    loadPhotoWall();
+    showToast('照片上传成功！共' + targetCount + '张');
+  } catch(err) {
+    console.error('上传错误:', err);
+    showToast('上传失败，请重试');
   }
   
   e.target.value = '';
 }
 
 function viewPhotoWall(slotIndex) {
-  var data = localStorage.getItem('gege_photo_wall_' + slotIndex);
+  // 从 localStorage 或直接读取显示
+  var wallData = [];
+  try {
+    wallData = JSON.parse(localStorage.getItem('gege_photo_wall_data')) || [];
+  } catch(e) {
+    // 从旧格式读取
+    for (var i = 1; i <= 3; i++) {
+      var oldData = localStorage.getItem('gege_photo_wall_' + i);
+      if (oldData) wallData.push({ url: oldData, slot: i });
+    }
+  }
+  
+  var photo = wallData.find(function(p) { return p.slot === slotIndex; });
+  var data = photo ? (photo.url || photo.data) : null;
   if (!data) { showToast('此圣容位尚无照片'); return; }
   
   var modal = document.createElement('div');
@@ -2229,17 +2413,35 @@ function viewPhotoWall(slotIndex) {
   document.body.appendChild(modal);
 }
 
-function syncDailyAlbumToWall() {
-  var photos = null;
-  try { photos = JSON.parse(localStorage.getItem('gege_gallery_photos_1')) || []; } catch(e) { photos = []; }
+async function syncDailyAlbumToWall() {
+  var photos = [];
+  try {
+    photos = await fetchFromGitHub(GITHUB_CONFIG.dataDir + '/gallery_1.json');
+  } catch(e) {
+    try { photos = JSON.parse(localStorage.getItem('gege_gallery_photos_1')) || []; } catch(e2) { photos = []; }
+  }
   
   if (photos.length === 0) return;
   
+  var wallData = [];
+  try {
+    wallData = await fetchFromGitHub(GITHUB_CONFIG.dataDir + '/photo_wall.json');
+  } catch(e) { /* 空 */ }
+  
   for (var i = 0; i < Math.min(photos.length, 3); i++) {
-    if (photos[i].data) {
-      localStorage.setItem('gege_photo_wall_' + (i + 1), photos[i].data);
+    var existingIndex = wallData.findIndex(function(p) { return p.slot === i + 1; });
+    var photoInfo = { url: photos[i].url || photos[i].data, type: photos[i].type, slot: i + 1 };
+    if (existingIndex >= 0) {
+      wallData[existingIndex] = photoInfo;
+    } else {
+      wallData.push(photoInfo);
     }
   }
+  
+  try {
+    await saveToGitHub(GITHUB_CONFIG.dataDir + '/photo_wall.json', wallData, 'Sync photo wall');
+  } catch(e) { /* 忽略错误 */ }
+  
   loadPhotoWall();
 }
 
@@ -2259,9 +2461,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ============ 启动时加载 ============
-function loadGalleryAndTraining() {
-  loadGallerySlots();
-  loadPhotoWall();
+async function loadGalleryAndTraining() {
+  await loadGallerySlots();
+  await loadPhotoWall();
   loadTrainingTiers();
   renderTributeGrid();
   checkGalleryLock();

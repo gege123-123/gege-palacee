@@ -4,13 +4,70 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>格格的宫殿 · 爱新觉罗</title>
-<link rel="stylesheet" href="style.css?v=20260810k">
+<link rel="stylesheet" href="style.css?v=20260811e">
 </head>
 <body>
+
+<!-- 用户登录/注册弹窗 -->
+<div id="userLoginModal" class="modal">
+  <div class="modal-content user-login-modal">
+    <div class="user-login-header">
+      <div class="user-login-seal">🐾</div>
+      <h2 id="userLoginTitle">奴才登录</h2>
+    </div>
+    
+    <!-- 网络状态显示 -->
+    <div id="networkStatus" class="network-status" style="display:none;">
+      <span id="networkStatusIcon">🔍</span>
+      <span id="networkStatusText">检测网络中...</span>
+    </div>
+    
+    <div id="loginForm">
+      <p class="user-login-hint">奴才请报名觐见格格</p>
+      <input type="text" id="loginUsername" placeholder="奴才名号">
+      <input type="password" id="loginPassword" placeholder="觐见口令">
+      <button class="save-btn big" onclick="userLogin()">报名觐见</button>
+      <p class="user-switch" onclick="showRegisterForm()">奴才首次来此？点此注册</p>
+    </div>
+    
+    <div id="registerForm" style="display:none;">
+      <p class="user-login-hint">新奴才请登记造册</p>
+      <input type="text" id="registerUsername" placeholder="奴才名号（2-20字）">
+      <input type="password" id="registerPassword" placeholder="觐见口令（至少4位）">
+      <input type="password" id="registerPassword2" placeholder="确认口令">
+      <button class="save-btn big" onclick="userRegister()">登记造册</button>
+      <p class="user-switch" onclick="showLoginForm()">已有名号？点此登录</p>
+    </div>
+    
+    <!-- 网络诊断提示 -->
+    <div id="networkHelp" class="network-help" style="display:none;">
+      <p class="network-help-title">⚠️ 网络连接问题</p>
+      <p class="network-help-text">奴才无法连接到格格的宫殿服务器</p>
+      <div class="network-help-steps">
+        <p>请按以下步骤检查：</p>
+        <p>1️⃣ 确认手机和电脑在<b>同一个WiFi</b>下</p>
+        <p>2️⃣ 确认访问地址：<span id="serverUrl" class="server-url"></span></p>
+        <p>3️⃣ 检查电脑<b>防火墙</b>是否阻止</p>
+        <p class="network-help-sub">电脑操作：控制面板 → Windows防火墙 → 关闭专用网络</p>
+      </div>
+      <button class="save-btn" onclick="testNetwork()">🔄 重新检测</button>
+    </div>
+  </div>
+</div>
 
 <!-- 浮动设置按钮（始终可见） -->
 <div id="floatingSettings" class="floating-settings" onclick="showAdminLogin()" title="格格设置">
   <span>⚙</span>
+</div>
+
+<!-- 用户信息显示（登录后显示） -->
+<div id="userInfoBar" class="user-info-bar" style="display:none;">
+  <span id="userInfoName">奴才</span>
+  <span class="user-info-divider">|</span>
+  <span>🪙 <span id="userInfoGold">0</span></span>
+  <span class="user-info-divider">|</span>
+  <span>叩拜 <span id="userInfoKneel">0</span> 次</span>
+  <button class="user-logout-btn" onclick="userLogout()" title="退出">🚪</button>
 </div>
 
 <!-- 管理员登录弹窗 -->
@@ -34,7 +91,7 @@
 <div id="rechargeModal" class="modal">
   <div class="modal-content recharge-modal-content">
     <span class="modal-close" onclick="closeRecharge()">&times;</span>
-    <h2 class="modal-title">💰 充金币 · 为格格奉献</h2>
+    <h2 class="modal-title">💰 充金币 · 奴才卖身钱</h2>
     <p class="recharge-hint">1元 = 10金币 · 奴才当以血汗奉上</p>
     <div class="recharge-options">
       <div class="recharge-card" data-amount="10" onclick="selectRecharge(10, this)">
@@ -88,7 +145,7 @@
     
     <!-- 扫码支付区域 -->
     <div class="scan-pay-area" id="scanPayArea">
-      <div class="scan-pay-title">📱 奴才扫码奉献</div>
+      <div class="scan-pay-title">📱 奴才扫码卖身</div>
       <div class="scan-pay-qr" id="scanPayQr">
         <div class="scan-qr-placeholder" id="scanQrPlaceholder">
           <span>点击下方按钮<br>生成付款二维码</span>
@@ -104,7 +161,7 @@
       <span id="rechargeBtnText">生成付款码 ¥5.00 → 55金币</span>
     </button>
     <button class="btn-cancel" onclick="closeRecharge()" style="width:100%;margin-top:8px;">取消</button>
-    <p class="recharge-notice">※ 奴才挣钱就是为了奉献给格格，这是应该的</p>
+    <p class="recharge-notice">※ 奴才活着就是为了卖身给格格，这是天经地义</p>
   </div>
 </div>
 
@@ -538,9 +595,25 @@
       <span class="gold-icon">🪙</span>
       <span class="gold-amount" id="goldAmount">0</span>
       <span class="gold-text">金币</span>
-      <span class="gold-add">+ 奉献</span>
+      <span class="gold-add">+ 卖身</span>
+    </div>
+    <div class="servant-status">
+      <span class="servant-level">奴才贱等：<b id="servantLevel">草民</b></span>
+      <span class="servant-title">赏差事：<b id="servantTitle">不配当奴才</b></span>
+    </div>
+    <div class="disgrace-timer" id="disgraceTimer">
+      <span style="color:#00FF00;">奴才尚在格格欢心，金币不贬</span>
     </div>
   </div>
+  
+  <!-- 罪奴录（滚动显示奴才卖身记录） -->
+  <div class="merit-scroll-container sin-container">
+    <div class="merit-scroll-title">📜 罪奴录 · 卖身登记 📜</div>
+    <div class="merit-scroll" id="meritScroll">
+      <div class="merit-waiting">暂无奴才敢卖身，等待第一个...</div>
+    </div>
+  </div>
+
   
   <!-- 龙椅+格格 -->
   <div class="throne-container">
@@ -573,33 +646,32 @@
           <div class="cushion-pattern"></div>
         </div>
         
-        <div class="gege-display" id="gegeDisplay">
-          <div class="gege-default" id="gegeDefault">
-            <div class="gege-placeholder">
-              <div class="gege-crown">👑</div>
-              <div class="gege-silhouette">
-                <svg viewBox="0 0 100 140" xmlns="http://www.w3.org/2000/svg">
-                  <ellipse cx="50" cy="30" rx="25" ry="15" fill="#D4AF37" opacity="0.9"/>
-                  <circle cx="50" cy="22" r="10" fill="#CC0000"/>
-                  <circle cx="50" cy="22" r="5" fill="#FFD700"/>
-                  <ellipse cx="50" cy="55" rx="18" ry="22" fill="#FFE4C4"/>
-                  <path d="M32 45 Q35 30 50 28 Q65 30 68 45 L68 55 Q65 48 50 46 Q35 48 32 55 Z" fill="#1a0a08"/>
-                  <path d="M42 50 Q45 48 48 50" stroke="#1a0a08" stroke-width="1.5" fill="none"/>
-                  <path d="M52 50 Q55 48 58 50" stroke="#1a0a08" stroke-width="1.5" fill="none"/>
-                  <path d="M45 62 Q50 65 55 62" stroke="#CC0000" stroke-width="1.5" fill="none"/>
-                  <circle cx="42" cy="60" r="3" fill="#FFB6C1" opacity="0.5"/>
-                  <circle cx="58" cy="60" r="3" fill="#FFB6C1" opacity="0.5"/>
-                  <rect x="45" y="75" width="10" height="6" fill="#FFE4C4"/>
-                  <path d="M25 85 Q30 80 50 78 Q70 80 75 85 L80 135 Q70 140 50 140 Q30 140 20 135 Z" fill="#CC0000"/>
-                  <path d="M35 82 Q50 77 65 82 L65 90 Q50 85 35 90 Z" fill="#FFD700"/>
-                  <circle cx="50" cy="105" r="6" fill="none" stroke="#FFD700" stroke-width="1.5"/>
-                  <rect x="30" y="115" width="40" height="5" fill="#FFD700"/>
-                </svg>
+        <div class="gege-display gege-photo-wall" id="gegeDisplay">
+          <div class="photo-wall-header">
+            <span class="photo-wall-title">💫 格格圣容 · 金銮御览</span>
+            <button class="photo-wall-upload" onclick="uploadPhotoWall()" title="上传照片">📤</button>
+          </div>
+          <div class="photo-wall-grid" id="photoWallGrid">
+            <div class="photo-wall-slot" data-slot="1" onclick="viewPhotoWall(1)">
+              <div class="photo-placeholder" id="photoWallSlot1">
+                <span class="photo-icon">📸</span>
+                <span>圣容一</span>
               </div>
-              <p class="gege-name" id="gegeName">爱新觉罗·格格</p>
-              <p class="gege-title-text">▼ 尊贵无比 ▼</p>
+            </div>
+            <div class="photo-wall-slot" data-slot="2" onclick="viewPhotoWall(2)">
+              <div class="photo-placeholder" id="photoWallSlot2">
+                <span class="photo-icon">📸</span>
+                <span>圣容二</span>
+              </div>
+            </div>
+            <div class="photo-wall-slot" data-slot="3" onclick="viewPhotoWall(3)">
+              <div class="photo-placeholder" id="photoWallSlot3">
+                <span class="photo-icon">📸</span>
+                <span>圣容三</span>
+              </div>
             </div>
           </div>
+          <input type="file" id="photoWallInput" accept="image/*" multiple style="display:none">
         </div>
       </div>
       
@@ -649,6 +721,7 @@
               </div>
             </div>
             <div class="slot-lock">🔒</div>
+            <button class="slot-upload-btn" onclick="event.stopPropagation();uploadGalleryMedia(1)" title="上传照片">📤</button>
           </div>
           <div class="slot-label">📸 日常圣容</div>
         </div>
@@ -666,6 +739,7 @@
               </div>
             </div>
             <div class="slot-lock">🔒</div>
+            <button class="slot-upload-btn" onclick="event.stopPropagation();uploadGalleryMedia(2)" title="上传影音">📤</button>
           </div>
           <div class="slot-label">🎬 训话影音</div>
         </div>
@@ -683,11 +757,12 @@
               </div>
             </div>
             <div class="slot-lock">🔒</div>
+            <button class="slot-upload-btn" onclick="event.stopPropagation();uploadGalleryMedia(3)" title="上传珍藏">📤</button>
           </div>
           <div class="slot-label">💎 珍藏阁</div>
         </div>
       </div>
-      <input type="file" id="galleryInput" accept="image/*,video/*" style="display:none">
+      <input type="file" id="galleryInput" accept="image/*,video/*" multiple style="display:none">
     </div>
     
     <div class="kneeling-servant">
@@ -746,8 +821,8 @@
   <!-- 奴才上贡区 -->
   <div class="tribute-area">
     <div class="tribute-header">
-      <span class="tribute-title">奴才上贡 · 磕头孝敬</span>
-      <span class="tribute-sub">奴才欲求格格一训，献上孝敬越多，跪得越久</span>
+      <span class="tribute-title">奴才卖身处 · 磕头求人</span>
+      <span class="tribute-sub">奴才想当差？先拿银子来赎身！钱越多，差事越脏，地位越贱！</span>
     </div>
     <div class="tribute-grid" id="tributeGrid">
       <!-- 动态生成的上贡项 -->
@@ -755,7 +830,7 @@
     
     <!-- 奉献排行榜 -->
     <div class="rank-section">
-      <div class="rank-title">📊 奴才奉献榜 <button class="rank-name-btn" onclick="setUserName()">✏️ 改名字</button></div>
+      <div class="rank-title">📊 奴才卖身榜 <button class="rank-name-btn" onclick="setUserName()">✏️ 改贱名</button></div>
       <div class="rank-list" id="rankList">
         <div class="rank-item">
           <span class="rank-num">1</span>
@@ -774,7 +849,7 @@
         </div>
       </div>
       <div class="rank-my-contribution">
-        <span><span id="myRankName">奴才</span>已奉献：</span>
+        <span><span id="myRankName">奴才</span>已卖身：</span>
         <span class="my-contrib-gold" id="myContribGold">🪙 0</span>
       </div>
     </div>
@@ -927,8 +1002,8 @@
     <button class="admin-btn" onclick="uploadQRCode()">
       <span>📷</span> 收款码
     </button>
-    <button class="admin-btn" onclick="uploadMediaFromPage()">
-      <span>🖼</span> 格格像
+    <button class="admin-btn" onclick="uploadDailyPhoto()">
+      <span>📸</span> 日常圣容
     </button>
     <button class="admin-btn" onclick="toggleVerifyMode()">
       <span>🔐</span> 验证开关
@@ -1131,6 +1206,18 @@
       <div class="archive-tab" onclick="switchArchiveTab(this, 'taopa')">
         <span>🏃</span> 逃亡奴与追捕
       </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'augment1')">
+        <span>🏴</span> 圈地与逃人
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'augment2')">
+        <span>👑</span> 满族特权·格格
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'augment3')">
+        <span>💀</span> 汉奴地狱实录
+      </div>
+      <div class="archive-tab" onclick="switchArchiveTab(this, 'augment4')">
+        <span>🏵</span> 格格真实传记
+      </div>
     </div>
     <div class="archive-content" id="archiveContent">
       <div class="archive-text-content">
@@ -1186,8 +1273,41 @@
 <!-- 返回顶部按钮 -->
 <a href="javascript:void(0)" class="back-top-btn" id="backTopBtn" onclick="scrollToTop()">⬆ 顶部</a>
 
-<script src="archive_data.js?v=20260810k"></script>
+<!-- 卖身契弹窗 -->
+<div id="nobleModal" class="noble-modal">
+  <div class="noble-content-wrapper deed-modal-wrapper">
+    <div id="nobleMsg"></div>
+    <button class="noble-close-btn" onclick="document.getElementById('nobleModal').classList.remove('active')">画押（磕头谢恩）</button>
+  </div>
+</div>
+
+<!-- 鞭刑预警弹窗 -->
+<div id="urgeModal" class="urge-modal">
+  <div class="urge-content-wrapper">
+    <h2 class="urge-title">⛓ 鞭刑预警令 ⛓</h2>
+    <p class="urge-text">
+      <b>奴才！</b><br>
+      你已许久未向格格卖身！<br>
+      看那罪奴录上，其他奴才都在抢着当差，<br>
+      只有你还在当草民！<br>
+      格格已不悦，鞭刑伺候！<br>
+      <b style="color:#FF0000;font-size:20px;">还不快快磕头奉上！</b>
+    </p>
+    <button class="urge-btn" onclick="switchTab('palace'); closeUrgeModal()">磕头卖身去！</button>
+  </div>
+</div>
+
+<!-- 忏悔墙弹窗 -->
+<div id="confessionModal" class="urge-modal confession-modal">
+  <div class="urge-content-wrapper confession-wrapper">
+    <h2 class="urge-title confession-title">🖊 奴才忏悔墙 🖊</h2>
+    <div id="confessionContent"></div>
+    <button class="urge-btn confession-close" onclick="closeConfession()">我也忏悔</button>
+  </div>
+</div>
+
+<script src="archive_data.js?v=20260812a"></script>
 <script src="training_data.js?v=20260810k"></script>
-<script src="app.js?v=20260810k"></script>
+<script src="app.js?v=20260812b"></script>
 </body>
 </html>

@@ -698,6 +698,11 @@ function generateRechargeQR() {
 }
 
 function confirmRechargePaid() {
+  if (!state.isAdmin) {
+    showToast('🙅 此功能仅格格可用！奴才请等待格格确认到账！');
+    closeRechargePay();
+    return;
+  }
   var amount = state.selectedRecharge;
   var gold = getRechargeGold(amount);
   state.gold += gold;
@@ -1937,6 +1942,22 @@ function updateDisgraceTimer() {
   }
 }
 
+// ============ 训诫快捷按钮 ============
+function updateTrainingQuickBtn() {
+  var quickBtn = document.getElementById('trainingQuickBtn');
+  if (!quickBtn) return;
+  
+  var trainingSection = document.getElementById('trainingSection');
+  if (trainingSection) {
+    var rect = trainingSection.getBoundingClientRect();
+    if (rect.top < window.innerHeight && rect.bottom > 0) {
+      quickBtn.style.display = 'none';
+    } else {
+      quickBtn.style.display = 'flex';
+    }
+  }
+}
+
 // ============ 催贡弹窗 ============
 
 function checkUrgeModal() {
@@ -2196,21 +2217,31 @@ function openAlbumLock(albumId) {
     if (slot) { slot.classList.remove('locked'); slot.classList.add('unlocked'); }
     openAlbumViewer(albumId); return;
   }
-  var pwd = albumPasswords[albumId] || localStorage.getItem('gege_album_pwd_' + albumId) || '000000';
-  var input = prompt('请输入格格赐予的密码（6位数字）：\n\n奴才跪拜恳求，望格格开恩...');
-  if (!input) return;
-  input = input.trim();
-  var storedPwd = localStorage.getItem('gege_album_pwd_' + albumId) || pwd;
-  if (input === storedPwd) {
-    unlockedAlbums[albumId] = true;
-    localStorage.setItem('gege_album_unlocked_' + albumId, '1');
-    var slot = document.querySelector('.gallery-slot[data-album="' + albumId + '"]');
-    if (slot) { slot.classList.remove('locked'); slot.classList.add('unlocked'); }
-    showToast('觐见成功！奴才叩谢格格恩典！');
-    openAlbumViewer(albumId);
-  } else {
-    showToast('密码错误！奴才无礼，请格格恕罪！');
+  
+  var cost = 520;
+  if (state.gold < cost) {
+    showToast('金币不足！需🪙' + cost + '金币方可觐见格格圣容！');
+    return;
   }
+  
+  var confirmMsg = '消耗🪙' + cost + '金币觐见格格圣容？\n\n奴才跪拜恳求，望格格开恩...';
+  if (!confirm(confirmMsg)) return;
+  
+  state.gold -= cost;
+  saveGold();
+  updateGoldDisplay();
+  updateUserInfoBar();
+  
+  state.totalTributed += cost;
+  saveTotalTributed();
+  updateRankDisplay();
+  
+  unlockedAlbums[albumId] = true;
+  localStorage.setItem('gege_album_unlocked_' + albumId, '1');
+  var slot = document.querySelector('.gallery-slot[data-album="' + albumId + '"]');
+  if (slot) { slot.classList.remove('locked'); slot.classList.add('unlocked'); }
+  showToast('觐见成功！奴才叩谢格格恩典！');
+  openAlbumViewer(albumId);
 }
 
 async function openAlbumViewer(albumId) {
@@ -2288,6 +2319,11 @@ var gallerySlotIndex = 0;
 function uploadGalleryMedia(slotIndex) {
   if (!state.isAdmin) { showToast('请格格先登录控制殿'); return; }
   if (!checkGithubToken()) return;
+  
+  var albumName = slotIndex === 1 ? '日常圣容' : (slotIndex === 2 ? '训话影音' : '其他相册');
+  var confirmMsg = '即将上传到【' + albumName + '】\n\n请确认：\n1. 内容为格格专属\n2. 奴才无权查看\n3. 上传后不可删除\n\n确认上传？';
+  if (!confirm(confirmMsg)) return;
+  
   gallerySlotIndex = slotIndex;
   var input = document.getElementById('galleryInput');
   if (input) input.click();

@@ -13,7 +13,9 @@ const http = require('http');
 const { URL } = require('url');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+// Railway 需要监听 3000 端口（Target port）
+// 本地开发时使用环境变量或默认 3000
+const PORT = process.env.NODE_ENV === 'production' ? 3000 : (process.env.PORT || 3000);
 
 // ============ CORS配置 - 必须放在最前面 ============
 // 处理所有CORS请求

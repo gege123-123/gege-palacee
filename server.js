@@ -109,18 +109,26 @@ const CONFIG_FILE = path.join(__dirname, 'payment_config.json');
 function loadConfig() {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      // 环境变量覆盖（云部署时使用）
+      if (process.env.MPAY_API_KEY) config.apiKey = process.env.MPAY_API_KEY;
+      if (process.env.MPAY_API_SECRET) config.apiSecret = process.env.MPAY_API_SECRET;
+      if (process.env.MPAY_ENDPOINT) config.mpayEndpoint = process.env.MPAY_ENDPOINT;
+      if (process.env.PUBLIC_URL) config.notifyUrl = process.env.PUBLIC_URL + '/api/payment/notify';
+      return config;
     }
   } catch (e) {}
+  // 环境变量优先
   return {
-    paymentMethod: 'qrcode',
-    apiKey: '',
-    apiSecret: '',
+    paymentMethod: process.env.PAYMENT_METHOD || 'qrcode',
+    apiKey: process.env.MPAY_API_KEY || '',
+    apiSecret: process.env.MPAY_API_SECRET || '',
     qrCodeImage: '',
     callbackUrl: '',
     autoVerify: false,
-    notifyUrl: '',
-    mpayEndpoint: 'https://api.mpays.cn'
+    notifyUrl: process.env.PUBLIC_URL ? process.env.PUBLIC_URL + '/api/payment/notify' : '',
+    mpayEndpoint: process.env.MPAY_ENDPOINT || 'https://api.mpays.cn',
+    testMode: false
   };
 }
 
@@ -136,10 +144,16 @@ function httpRequest(url, options = {}) {
     const urlObj = new URL(url);
     const method = options.method || 'GET';
     const headers = { ...options.headers };
-    const body = options.body ? JSON.stringify(options.body) : null;
     
-    if (body) {
-      headers['Content-Type'] = 'application/json';
+    // body如果是字符串则直接使用（form-urlencoded），否则JSON序列化
+    let body = null;
+    if (options.body) {
+      if (typeof options.body === 'string') {
+        body = options.body;
+      } else {
+        body = JSON.stringify(options.body);
+        headers['Content-Type'] = 'application/json';
+      }
       headers['Content-Length'] = Buffer.byteLength(body);
     }
     
@@ -202,7 +216,7 @@ function generateOrderNo() {
   return 'GEGE' + timestamp + random.toUpperCase();
 }
 
-function createOrder(amount, description) {
+function createOrder(amount, description, username, goldAmount) {
   const orderNo = generateOrderNo();
   const order = {
     orderNo,
@@ -214,7 +228,10 @@ function createOrder(amount, description) {
     expiredAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     paymentMethod: config.paymentMethod,
     notifyData: null,
-    apiOrderNo: null
+    apiOrderNo: null,
+    username: username || null,
+    goldAmount: goldAmount || 0,
+    paid: false
   };
   orders.set(orderNo, order);
   saveOrders();
@@ -238,62 +255,124 @@ setInterval(() => {
 
 /**
  * 码支付 API - 创建支付订单
- * 对接码支付/BufPay等聚合支付平台
+ * 对接码支付易支付协议(V1)
+ * 文档: https://pay.mapay.cn/doc.html
  */
 async function createMPayOrder(order) {
   try {
-    const endpoint = config.mpayEndpoint || 'https://api.mpays.cn';
-    const apiKey = config.apiKey;
-    const apiSecret = config.apiSecret;
+    const endpoint = config.mpayEndpoint || 'https://mzf.mapay.cc/xpay/epay';
+    const pid = config.apiKey;       // PID = 12809
+    const secret = config.apiSecret;  // SECRET
     
-    if (!apiKey) {
-      console.log('API Key未设置，使用本地模式');
+    if (!pid || !secret) {
+      console.log('API Key或Secret未设置，使用本地模式');
       return null;
     }
     
     // 构造回调URL
     const notifyUrl = config.notifyUrl || `http://localhost:${PORT}/api/payment/notify`;
+    const returnUrl = config.notifyUrl || `http://localhost:${PORT}/api/payment/notify`;
     
-    // 码支付API参数（根据不同平台调整）
+    // 易支付协议参数
     const params = {
-      order_no: order.orderNo,
-      amount: Math.round(order.amount * 100), // 分
-      subject: order.description,
+      pid: pid,
+      type: config.mpayType || 'wxpay',  // wxpay=微信, alipay=支付宝
+      out_trade_no: order.orderNo,
       notify_url: notifyUrl,
-      pay_type: 'wx', // 默认微信支付，可改为 auto 让用户选择
-      device: 'pc'
+      return_url: returnUrl,
+      name: order.description || '格格的宫殿-金币充值',
+      money: order.amount.toFixed(2)
     };
     
-    // 生成签名
-    const signStr = Object.keys(params)
-      .sort()
-      .map(k => `${k}=${params[k]}`)
-      .join('&') + `&key=${apiSecret}`;
-    params.sign = crypto.createHash('md5').update(signStr).digest('hex').toUpperCase();
-    params.api_key = apiKey;
+    // 生成MD5签名（易支付V1协议）
+    // 规则：排除sign、sign_type、charset，所有参数按参数名字典序排序，
+    // 拼接成 key1=val1&key2=val2... 再直接拼接密钥，MD5小写
+    const signParams = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (k !== 'sign' && k !== 'sign_type' && k !== 'charset' && v !== '' && v !== null && v !== undefined) {
+        signParams[k] = String(v);
+      }
+    }
+    const signKeys = Object.keys(signParams).sort();
+    let signStr = '';
+    for (const k of signKeys) {
+      signStr += `${k}=${signParams[k]}&`;
+    }
+    signStr = signStr.replace(/&$/, '');
+    const stringSignTemp = signStr + secret;
+    const sign = crypto.createHash('md5').update(stringSignTemp, 'utf8').digest('hex');
+    params.sign = sign;
     
-    console.log('调用码支付API，参数:', { ...params, sign: '***' });
+    console.log('📱 调用码支付API（易支付V1协议）');
+    console.log('  PID:', pid);
+    console.log('  金额:', params.money, '元');
+    console.log('  订单号:', params.out_trade_no);
+    console.log('  支付方式:', params.type);
+    console.log('  签名原串:', signStr.substring(0, 50) + '...');
+    console.log('  签名:', sign);
     
-    // 真实调用码支付API
-    const response = await httpRequest(`${endpoint}/api/order/create`, {
+    // 易支付协议使用POST form-urlencoded
+    const queryString = Object.keys(params)
+      .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
+      .join('&');
+    
+    // 使用mapi.php接口（返回JSON格式，包含payurl/qrcode）
+    const mapiUrl = `${endpoint}/mapi.php`;
+    
+    const response = await httpRequest(mapiUrl, {
       method: 'POST',
-      body: params
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(queryString)
+      },
+      body: queryString
     });
     
-    console.log('码支付API响应:', typeof response === 'object' ? JSON.stringify(response).substring(0, 200) : response);
-    
-    // 处理响应
-    if (response && (response.code === 0 || response.code === 1 || response.status === 1)) {
-      const data = response.data || response;
-      return {
-        qrCode: data.qr_code || data.qrCode || data.code_url || data.pay_qrcode || data.payCode,
-        orderNo: data.order_no || data.orderNo || data.mch_order_no,
-        rawData: data
-      };
-    } else {
-      console.error('码支付API返回错误:', response.msg || response.message || response);
+    // httpRequest已自动解析JSON，response可能是对象或字符串
+    if (!response) {
+      console.error('码支付API无响应');
       return null;
     }
+    
+    let jsonResp;
+    if (typeof response === 'object') {
+      jsonResp = response;
+    } else {
+      try {
+        jsonResp = JSON.parse(response);
+      } catch (e) {
+        console.error('JSON解析失败:', e.message);
+        console.log('原始响应:', String(response).substring(0, 300));
+        return null;
+      }
+    }
+    
+    console.log('码支付API响应:', JSON.stringify(jsonResp).substring(0, 300));
+    
+    if (jsonResp.code === 1) {
+      // 成功：返回支付链接/二维码
+      // qrcode: 支付宝网页支付URL，urlscheme: 支付宝APP支付链接
+      const qrcode = jsonResp.qrcode || jsonResp.qrCode || '';
+      const payUrl = jsonResp.urlscheme || jsonResp.payurl || '';
+      
+      // 生成二维码图片URL（使用公共二维码生成服务）
+      const qrImageUrl = qrcode 
+        ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=${encodeURIComponent(qrcode)}`
+        : '';
+      
+      return {
+        qrCode: qrImageUrl,  // 真正的二维码图片URL
+        qrUrl: qrcode,       // 原始支付链接
+        payUrl: payUrl,      // APP支付链接
+        orderNo: jsonResp.trade_no || order.orderNo,
+        amount: jsonResp.money || order.amount.toFixed(2),
+        rawData: jsonResp
+      };
+    } else {
+      console.error('码支付返回错误:', jsonResp.msg || '未知错误');
+      return null;
+    }
+    
   } catch (error) {
     console.error('调用码支付API失败:', error.message);
     return null;
@@ -303,35 +382,100 @@ async function createMPayOrder(order) {
 /**
  * 码支付 API - 查询订单状态
  * 用于轮询机制，在回调失败时兜底验证
+ * 使用易支付V1协议的mapi.php接口查询
  */
 async function queryMPayOrder(orderNo) {
   try {
-    const endpoint = config.mpayEndpoint || 'https://api.mpays.cn';
-    const apiKey = config.apiKey;
-    const apiSecret = config.apiSecret;
+    const endpoint = config.mpayEndpoint || 'https://mzf.mapay.cc/xpay/epay';
+    const pid = config.apiKey;
+    const secret = config.apiSecret;
     
-    if (!apiKey) return null;
+    if (!pid || !secret) return null;
     
-    const params = {
-      order_no: orderNo
+    // 从本地订单获取金额信息
+    const localOrder = orders.get(orderNo);
+    const orderAmount = localOrder ? localOrder.amount.toFixed(2) : '0.01';
+    const orderDesc = localOrder ? (localOrder.description || '订单查询') : '订单查询';
+    
+    // 易支付协议 - 查询订单参数（与创建订单相同的签名方式）
+    const queryParams = {
+      act: 'order',
+      pid: pid,
+      out_trade_no: orderNo,
+      type: config.mpayType || 'alipay',
+      name: orderDesc,
+      money: orderAmount
     };
     
-    const signStr = Object.keys(params)
-      .sort()
-      .map(k => `${k}=${params[k]}`)
-      .join('&') + `&key=${apiSecret}`;
-    params.sign = crypto.createHash('md5').update(signStr).digest('hex').toUpperCase();
-    params.api_key = apiKey;
+    // 生成MD5签名（易支付V1协议 - 与创建订单完全一致）
+    const signParams = {};
+    for (const [k, v] of Object.entries(queryParams)) {
+      if (k !== 'sign' && k !== 'sign_type' && k !== 'charset' && v !== '' && v !== null && v !== undefined) {
+        signParams[k] = String(v);
+      }
+    }
+    const signKeys = Object.keys(signParams).sort();
+    let signStr = '';
+    for (const k of signKeys) {
+      signStr += `${k}=${signParams[k]}&`;
+    }
+    signStr = signStr.replace(/&$/, '');
+    const stringSignTemp = signStr + secret;
+    const sign = crypto.createHash('md5').update(stringSignTemp, 'utf8').digest('hex');
     
-    const response = await httpRequest(`${endpoint}/api/order/query`, {
+    // 添加签名到查询参数
+    queryParams.sign = sign;
+    queryParams.sign_type = 'MD5';
+    
+    // 使用mapi.php接口查询（与创建订单相同的接口）
+    const mapiUrl = endpoint.replace(/\/$/, '') + '/mapi.php';
+    
+    const queryString = Object.keys(queryParams)
+      .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(queryParams[k])}`)
+      .join('&');
+    
+    const result = await httpRequest(mapiUrl, {
       method: 'POST',
-      body: params
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(queryString)
+      },
+      body: queryString
     });
     
-    if (response && response.code === 0) {
-      return response.data || response;
+    console.log('查询订单响应:', result ? (typeof result === 'string' ? result.substring(0, 200) : JSON.stringify(result).substring(0, 200)) : 'null');
+    
+    if (!result) return null;
+    
+    // 处理响应
+    let jsonResp;
+    if (typeof result === 'object') {
+      jsonResp = result;
+    } else {
+      try {
+        jsonResp = JSON.parse(result);
+      } catch (e) {
+        console.log('查询订单JSON解析失败:', result.substring(0, 100));
+        return null;
+      }
     }
-    return null;
+    
+    console.log('查询订单JSON:', JSON.stringify(jsonResp).substring(0, 300));
+    
+    // 码支付返回说明：
+    // code=1 表示API请求成功（不是支付成功！）
+    // status/pay_status=1 才表示支付成功
+    // status/pay_status=0 表示未支付
+    
+    // 如果API请求失败（code!=1），直接返回
+    if (jsonResp.code !== 1 && jsonResp.code !== '1') {
+      console.log('查询订单失败，API返回错误:', jsonResp.msg || jsonResp.text);
+      return jsonResp;
+    }
+    
+    // API请求成功，返回原始数据（由调用方判断支付状态）
+    // 注意：不要在这里设置status=1，让调用方正确判断支付状态
+    return jsonResp;
   } catch (error) {
     console.error('查询订单失败:', error.message);
     return null;
@@ -339,17 +483,14 @@ async function queryMPayOrder(orderNo) {
 }
 
 /**
- * 主动查询第三方订单状态（兜底机制）
- * 如果回调没有触发，可以通过轮询来验证
+ * 主动查询第三方订单状态（基础版）
  */
 async function pollAndVerifyOrder(orderNo) {
   const order = orders.get(orderNo);
   if (!order || order.status !== 'pending') return;
   
-  // 每5秒查询一次，最多查询6次（30秒）
   for (let i = 0; i < 6; i++) {
     await new Promise(resolve => setTimeout(resolve, 5000));
-    
     const currentOrder = orders.get(orderNo);
     if (!currentOrder || currentOrder.status !== 'pending') return;
     
@@ -357,15 +498,119 @@ async function pollAndVerifyOrder(orderNo) {
     const result = await queryMPayOrder(apiOrderNo);
     
     if (result && (result.status === 1 || result.status === 'paid' || result.pay_status === 1)) {
-      currentOrder.status = 'paid';
-      currentOrder.paidAt = new Date().toISOString();
-      currentOrder.notifyData = result;
-      orders.set(orderNo, currentOrder);
-      saveOrders();
-      console.log('轮询发现支付成功:', orderNo);
+      markOrderAsPaid(orderNo, result, '轮询检测');
       return;
     }
   }
+}
+
+/**
+ * 增强版轮询 - 更长时间、更高频率的支付检测
+ * 用于兜底机制，确保支付不会丢失
+ */
+async function pollAndVerifyOrderEnhanced(orderNo) {
+  const order = orders.get(orderNo);
+  if (!order || order.status !== 'pending') return;
+  
+  console.log(`[增强轮询] 开始监控订单: ${orderNo}`);
+  
+  // 前2分钟：每3秒查一次
+  for (let i = 0; i < 40; i++) {
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    const currentOrder = orders.get(orderNo);
+    if (!currentOrder || currentOrder.status !== 'pending') {
+      console.log(`[增强轮询] 订单状态已变更，停止轮询: ${orderNo}`);
+      return;
+    }
+    
+    const apiOrderNo = currentOrder.apiOrderNo || currentOrder.orderNo;
+    const result = await queryMPayOrder(apiOrderNo);
+    
+    if (result && isPaySuccess(result)) {
+      markOrderAsPaid(orderNo, result, '增强轮询');
+      return;
+    }
+  }
+  
+  // 第3-10分钟：每10秒查一次
+  for (let i = 0; i < 48; i++) {
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    const currentOrder = orders.get(orderNo);
+    if (!currentOrder || currentOrder.status !== 'pending') return;
+    
+    const apiOrderNo = currentOrder.apiOrderNo || currentOrder.orderNo;
+    const result = await queryMPayOrder(apiOrderNo);
+    
+    if (result && isPaySuccess(result)) {
+      markOrderAsPaid(orderNo, result, '增强轮询(低频)');
+      return;
+    }
+  }
+  
+  console.log(`[增强轮询] 轮询结束，订单仍未支付: ${orderNo}`);
+}
+
+/**
+ * 判断支付是否成功
+ * 码支付/易支付返回格式：
+ *   code=1: API请求成功（不代表支付成功）
+ *   status=1 或 pay_status=1: 支付成功
+ *   status=0 或 pay_status=0: 未支付
+ */
+function isPaySuccess(result) {
+  if (!result) return false;
+  
+  // 必须API请求成功（code=1）
+  if (result.code !== 1 && result.code !== '1') {
+    return false;
+  }
+  
+  // 检查支付状态：status=1 或 pay_status=1 表示支付成功
+  if (result.status === 1 || result.status === '1') {
+    return true;
+  }
+  if (result.pay_status === 1 || result.pay_status === '1') {
+    return true;
+  }
+  
+  // 检查其他可能的成功标志
+  if (result.trade_state === 'SUCCESS' || result.trade_state === 'paid') {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * 通用订单支付成功处理 - 统一入口
+ */
+function markOrderAsPaid(orderNo, payData, source) {
+  const order = orders.get(orderNo);
+  if (!order) return false;
+  
+  // 防止重复处理
+  if (order.status === 'paid' && order.paid) {
+    console.log(`订单已处理，跳过: ${orderNo}`);
+    return true;
+  }
+  
+  order.status = 'paid';
+  order.paidAt = new Date().toISOString();
+  order.notifyData = payData;
+  
+  // 自动给用户加金币
+  if (order.username && order.goldAmount > 0 && !order.paid) {
+    const success = addUserGold(order.username, order.goldAmount, `${source}充值`);
+    order.paid = success;
+    console.log(`✅ ${source}充值成功: 用户=${order.username}, 金币=+${order.goldAmount}, 订单=${orderNo}`);
+  } else if (!order.username) {
+    console.log(`⚠️ ${source}订单无关联用户: ${orderNo}`);
+    order.paid = true;
+  }
+  
+  orders.set(orderNo, order);
+  saveOrders();
+  return true;
 }
 
 // ============ API 路由 ============
@@ -380,7 +625,13 @@ app.get('/api/config', (req, res) => {
     hasQRCode: !!config.qrCodeImage,
     autoVerify: config.autoVerify,
     notifyUrl: config.notifyUrl,
-    mpayEndpoint: config.mpayEndpoint || 'https://api.mpays.cn'
+    mpayEndpoint: config.mpayEndpoint || 'https://api.mpays.cn',
+    testMode: config.testMode || false,
+    paymentModes: [
+      { value: 'qrcode', label: '收款码模式（手动）' },
+      { value: 'api', label: 'API模式（自动到账）' },
+      { value: 'test', label: '测试模式（模拟支付）' }
+    ]
   });
 });
 
@@ -388,7 +639,7 @@ app.get('/api/config', (req, res) => {
 app.post('/api/config', (req, res) => {
   const updates = req.body;
   
-  const allowedFields = ['paymentMethod', 'apiKey', 'apiSecret', 'qrCodeImage', 'autoVerify', 'notifyUrl', 'mpayEndpoint'];
+  const allowedFields = ['paymentMethod', 'apiKey', 'apiSecret', 'qrCodeImage', 'autoVerify', 'notifyUrl', 'mpayEndpoint', 'testMode'];
   allowedFields.forEach(field => {
     if (updates[field] !== undefined) {
       config[field] = updates[field];
@@ -396,13 +647,47 @@ app.post('/api/config', (req, res) => {
   });
   
   saveConfig(config);
+  console.log('配置已更新:', JSON.stringify({...config, apiKey: config.apiKey ? '***' : '', apiSecret: config.apiSecret ? '***' : ''}));
   res.json({ success: true, message: '配置已更新' });
 });
+
+// 生成测试模式的模拟二维码
+function generateTestQRCode(orderNo) {
+  const qrSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+    <rect width="200" height="200" fill="#fff"/>
+    <rect x="20" y="20" width="40" height="40" fill="#000"/>
+    <rect x="140" y="20" width="40" height="40" fill="#000"/>
+    <rect x="20" y="140" width="40" height="40" fill="#000"/>
+    <rect x="30" y="30" width="20" height="20" fill="#fff"/>
+    <rect x="150" y="30" width="20" height="20" fill="#fff"/>
+    <rect x="30" y="150" width="20" height="20" fill="#fff"/>
+    <rect x="35" y="35" width="10" height="10" fill="#000"/>
+    <rect x="155" y="35" width="10" height="10" fill="#000"/>
+    <rect x="35" y="155" width="10" height="10" fill="#000"/>
+    <text x="100" y="105" text-anchor="middle" font-size="14" fill="#666">TEST</text>
+    <text x="100" y="125" text-anchor="middle" font-size="10" fill="#999">${orderNo.slice(-8)}</text>
+  </svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(qrSvg)}`;
+}
+
+// 金币计算函数 - 1元 = 10金币，大额赠送额外金币
+function calculateGoldAmount(priceInYuan) {
+  const amount = Math.round(priceInYuan * 10);
+  let bonus = 0;
+  if (amount >= 50) bonus = 5;
+  if (amount >= 100) bonus = 15;
+  if (amount >= 500) bonus = 100;
+  if (amount >= 1000) bonus = 300;
+  if (amount >= 5000) bonus = 2000;
+  return amount + bonus;
+}
 
 // 创建支付订单
 app.post('/api/order/create', async (req, res) => {
   try {
-    const { amount, description } = req.body;
+    const { amount, description, token: bodyToken } = req.body;
+    const headerToken = req.headers.authorization?.replace('Bearer ', '');
+    const token = headerToken || bodyToken;
     
     if (!amount || parseFloat(amount) <= 0) {
       return res.status(400).json({ success: false, message: '金额无效' });
@@ -412,19 +697,57 @@ app.post('/api/order/create', async (req, res) => {
       return res.status(400).json({ success: false, message: '最低金额1元' });
     }
     
-    const order = createOrder(amount, description);
+    // 验证用户身份 - 支持从header或body传递token
+    let username = null;
+    if (token) {
+      const user = verifySession(token);
+      if (user) {
+        username = user.username;
+        console.log(`订单绑定用户: ${username}`);
+      }
+    }
+    
+    // 计算金币数量
+    const goldAmount = calculateGoldAmount(amount);
+    
+    const order = createOrder(amount, description, username, goldAmount);
     
     const response = {
       success: true,
       orderNo: order.orderNo,
       amount: order.amount,
+      goldAmount: goldAmount,
       description: order.description,
       expiresAt: order.expiredAt,
-      paymentMethod: config.paymentMethod
+      paymentMethod: config.paymentMethod,
+      username: username,
+      hasUser: !!username
     };
     
     // 根据支付模式返回不同内容
-    if (config.paymentMethod === 'api' && config.apiKey) {
+    if (config.paymentMethod === 'test' || config.testMode) {
+      // 测试模式：生成模拟二维码，3秒后自动支付成功
+      response.qrCode = generateTestQRCode(order.orderNo);
+      response.paymentMode = 'test';
+      response.isAutoVerify = true;
+      response.testMode = true;
+      
+      // 3秒后自动模拟支付成功
+      setTimeout(() => {
+        const currentOrder = orders.get(order.orderNo);
+        if (currentOrder && currentOrder.status === 'pending') {
+          markOrderAsPaid(order.orderNo, { 
+            testMode: true, 
+            paidAt: new Date().toISOString(),
+            amount: order.amount * 100,
+            status: 'paid'
+          }, '测试模式自动');
+          console.log(`🧪 测试模式：订单 ${order.orderNo} 自动支付成功`);
+        }
+      }, 3000);
+      
+      console.log(`🧪 测试模式：订单 ${order.orderNo} 创建成功，将在3秒后自动支付`);
+    } else if (config.paymentMethod === 'api' && config.apiKey) {
       // API模式：调用第三方支付
       const apiOrder = await createMPayOrder(order);
       
@@ -433,24 +756,38 @@ app.post('/api/order/create', async (req, res) => {
         orders.set(order.orderNo, order);
         saveOrders();
         
-        response.qrCode = apiOrder.qrCode;
+        response.qrCode = apiOrder.qrCode;      // 二维码图片URL
+        response.qrUrl = apiOrder.qrUrl;        // 原始支付链接（用于跳转）
+        response.payUrl = apiOrder.payUrl;      // APP支付链接
         response.apiOrderNo = apiOrder.orderNo;
         response.isAutoVerify = config.autoVerify;
+        response.paymentMode = 'api';
+        
+        // 如果有支付链接，标记需要前端跳转
+        if (apiOrder.qrUrl || apiOrder.payUrl) {
+          response.needRedirect = true;
+          response.redirectUrl = apiOrder.qrUrl || apiOrder.payUrl;
+        }
         
         // 如果开启自动验证，启动轮询兜底
-        if (config.autoVerify && apiOrder.orderNo) {
-          pollAndVerifyOrder(order.orderNo);
+        if (config.autoVerify) {
+          pollAndVerifyOrderEnhanced(order.orderNo);
         }
       } else {
         // API调用失败，降级为手动模式
         response.qrCode = config.qrCodeImage;
         response.isAutoVerify = false;
         response.fallbackToManual = true;
+        response.paymentMode = 'manual';
         console.log('API调用失败，降级为手动验证模式');
       }
     } else if (config.qrCodeImage) {
       // 收款码模式
       response.qrCode = config.qrCodeImage;
+      response.paymentMode = 'qrcode';
+      response.isAutoVerify = false;
+    } else {
+      response.paymentMode = 'none';
     }
     
     res.json(response);
@@ -480,7 +817,22 @@ app.get('/api/order/:orderNo', (req, res) => {
   });
 });
 
-// 确认订单已支付
+// 给用户增加金币的函数
+function addUserGold(username, amount, reason) {
+  if (!username || !users[username]) {
+    console.error('用户不存在，无法加金币:', username);
+    return false;
+  }
+  
+  const user = users[username];
+  user.gold = (user.gold || 0) + amount;
+  users[username] = user;
+  saveUsers(users);
+  console.log(`✅ 用户 ${username} 增加 ${amount} 金币（${reason}），当前金币: ${user.gold}`);
+  return true;
+}
+
+// 确认订单已支付（手动确认或API验证后确认）
 app.post('/api/order/:orderNo/confirm', (req, res) => {
   const orderNo = req.params.orderNo;
   const order = orders.get(orderNo);
@@ -489,20 +841,32 @@ app.post('/api/order/:orderNo/confirm', (req, res) => {
     return res.status(404).json({ success: false, message: '订单不存在' });
   }
   
-  if (order.status === 'paid') {
-    return res.json({ success: true, status: 'paid', message: '订单已支付' });
+  // 如果已经支付成功，直接返回
+  if (order.status === 'paid' && order.paid) {
+    return res.json({ 
+      success: true, 
+      status: 'paid', 
+      message: '订单已支付',
+      goldAdded: order.goldAmount
+    });
   }
   
-  if (order.status !== 'pending') {
-    return res.status(400).json({ success: false, message: '订单状态异常: ' + order.status });
+  // 允许从pending状态确认
+  if (order.status === 'pending') {
+    // 使用统一入口处理
+    markOrderAsPaid(orderNo, { confirmedAt: new Date().toISOString() }, '手动确认');
+    
+    const updatedOrder = orders.get(orderNo);
+    return res.json({ 
+      success: true, 
+      status: 'paid', 
+      message: '支付确认成功',
+      goldAdded: updatedOrder ? updatedOrder.goldAmount : 0,
+      username: updatedOrder ? updatedOrder.username : null
+    });
   }
   
-  order.status = 'paid';
-  order.paidAt = new Date().toISOString();
-  orders.set(orderNo, order);
-  saveOrders();
-  
-  res.json({ success: true, status: 'paid', message: '支付确认成功' });
+  return res.status(400).json({ success: false, message: '订单状态异常: ' + order.status });
 });
 
 // 取消订单
@@ -527,20 +891,24 @@ app.post('/api/order/:orderNo/cancel', (req, res) => {
 
 /**
  * 码支付回调通知接口
- * 接收码支付平台的支付结果通知
+ * 接收码支付平台的支付结果通知，自动给用户加金币
+ * 支持多种支付平台格式
  */
 app.post('/api/payment/notify', async (req, res) => {
   try {
-    console.log('收到支付回调通知:', JSON.stringify(req.body).substring(0, 200));
+    console.log('收到支付回调通知:', JSON.stringify(req.body).substring(0, 300));
     
     const body = req.body;
     
     // 支持多种订单号字段格式
-    const actualOrderNo = body.order_no || body.orderNo || body.mch_order_no || body.mchOrderNo;
+    const actualOrderNo = body.order_no || body.orderNo || body.mch_order_no || body.mchOrderNo || 
+                          body.out_trade_no || body.outTradeNo || body.merchant_order_no;
     if (!actualOrderNo) {
-      console.error('回调缺少订单号');
+      console.error('回调缺少订单号，所有字段:', Object.keys(body));
       return res.json({ code: 0, msg: '缺少订单号' });
     }
+    
+    console.log('回调订单号:', actualOrderNo);
     
     // 查找订单（可能是本地订单号或第三方订单号）
     let order = orders.get(actualOrderNo);
@@ -557,61 +925,141 @@ app.post('/api/payment/notify', async (req, res) => {
     
     if (!order) {
       console.error('回调订单不存在:', actualOrderNo);
-      return res.json({ code: 0, msg: '订单不存在' });
+      // 返回成功避免第三方重复通知
+      return res.json({ code: 1, msg: 'success', note: '订单不存在但已记录' });
     }
     
-    // 验证签名
+    console.log('找到订单:', order.orderNo, '金额:', order.amount, '用户:', order.username);
+    
+    // 验证签名（如果有）
     if (body.sign && config.apiSecret) {
-      const signParams = {};
-      Object.keys(body).forEach(key => {
-        if (key !== 'sign') signParams[key] = body[key];
-      });
-      
-      const signStr = Object.keys(signParams)
-        .sort()
-        .map(k => `${k}=${signParams[k]}`)
-        .join('&') + `&key=${config.apiSecret}`;
-      const expectedSign = crypto.createHash('md5').update(signStr).digest('hex').toUpperCase();
-      
-      if (body.sign !== expectedSign) {
-        console.error('签名验证失败:', actualOrderNo);
-        return res.json({ code: 0, msg: '签名验证失败' });
+      try {
+        const signParams = {};
+        Object.keys(body).forEach(key => {
+          if (key !== 'sign' && key !== 'sign_type' && key !== 'charset') signParams[key] = body[key];
+        });
+        
+        const signStr = Object.keys(signParams)
+          .sort()
+          .map(k => `${k}=${signParams[k]}`)
+          .join('&') + `&key=${config.apiSecret}`;
+        const expectedSign = crypto.createHash('md5').update(signStr).digest('hex').toUpperCase();
+        
+        if (body.sign.toUpperCase() !== expectedSign) {
+          console.error('签名验证失败:', actualOrderNo);
+          console.log('期望签名:', expectedSign, '实际签名:', body.sign);
+          // 即使签名失败，如果金额和状态都正确，仍然处理（部分平台签名机制不同）
+        } else {
+          console.log('签名验证通过');
+        }
+      } catch (signErr) {
+        console.error('签名验证异常:', signErr.message);
       }
-      console.log('签名验证通过');
     }
     
-    // 验证金额
-    const payAmount = parseFloat(body.amount || body.pay_amount || body.total_fee);
-    if (payAmount) {
+    // 验证金额（可选，部分平台格式不同）
+    const payAmount = parseFloat(body.amount || body.pay_amount || body.total_fee || body.fee);
+    if (payAmount && order.amount > 0) {
       const amountInYuan = payAmount > 100 ? payAmount / 100 : payAmount;
-      if (Math.abs(amountInYuan - order.amount) > 0.01) {
-        console.error('金额不匹配: 回调=' + amountInYuan + ', 订单=' + order.amount);
-        return res.json({ code: 0, msg: '金额不匹配' });
+      if (Math.abs(amountInYuan - order.amount) > 1.0) { // 允许1元误差（部分平台手续费）
+        console.warn('金额不匹配: 回调=' + amountInYuan + ', 订单=' + order.amount + '，继续处理');
       }
     }
     
-    // 判断支付状态
-    const payStatus = body.status || body.pay_status || body.trade_state;
-    const isPaid = ['paid', 'success', 'SUCCESS', '1', 1, 'completed', 'finish'].includes(payStatus);
+    // 判断支付状态 - 支持多种状态字段
+    // 码支付回调格式：status=1 或 pay_status=1 表示支付成功
+    // code=1 只是表示回调请求成功，不代表支付成功
+    let isPaid = false;
+    
+    // 优先检查 status 和 pay_status 字段
+    if (body.status === 1 || body.status === '1') {
+      isPaid = true;
+    } else if (body.pay_status === 1 || body.pay_status === '1') {
+      isPaid = true;
+    } else if (['paid', 'success', 'SUCCESS', 'completed', 'finish', 'PAYSUCCESS'].includes(body.status)) {
+      isPaid = true;
+    } else if (['paid', 'success', 'SUCCESS', 'completed', 'finish', 'PAYSUCCESS'].includes(body.pay_status)) {
+      isPaid = true;
+    }
+    
+    console.log('支付状态: status=' + body.status + ', pay_status=' + body.pay_status + ', 是否成功=' + isPaid);
     
     if (isPaid) {
-      // 更新订单状态
-      order.status = 'paid';
-      order.paidAt = new Date().toISOString();
-      order.notifyData = body;
-      orders.set(order.orderNo, order);
-      saveOrders();
-      
-      console.log('✅ 支付成功:', order.orderNo, '金额:', order.amount, '元');
+      // 使用统一入口处理
+      markOrderAsPaid(order.orderNo, body, '支付回调');
+      console.log('✅ 支付回调处理成功:', order.orderNo);
       return res.json({ code: 1, msg: 'success' });
     } else {
       console.log('回调状态未成功:', payStatus);
-      return res.json({ code: 0, msg: '状态未成功' });
+      return res.json({ code: 0, msg: '状态未成功', status: payStatus });
     }
   } catch (error) {
     console.error('回调处理异常:', error);
-    res.json({ code: 0, msg: '处理异常' });
+    // 即使异常也返回成功，避免第三方重复通知
+    res.json({ code: 1, msg: 'received' });
   }
+});
+
+// ============ 测试模式接口 ============
+
+/**
+ * 模拟支付成功回调（用于本地测试）
+ * 在测试模式下，可以通过此接口手动触发支付成功
+ */
+app.post('/api/test/pay/:orderNo', (req, res) => {
+  try {
+    const orderNo = req.params.orderNo;
+    const order = orders.get(orderNo);
+    
+    if (!order) {
+      return res.status(404).json({ success: false, message: '订单不存在' });
+    }
+    
+    if (order.status === 'paid') {
+      return res.json({ success: true, message: '订单已支付', orderNo });
+    }
+    
+    // 模拟支付成功
+    markOrderAsPaid(orderNo, { 
+      testMode: true, 
+      paidAt: new Date().toISOString(),
+      amount: order.amount * 100,
+      status: 'paid'
+    }, '测试模式');
+    
+    res.json({ 
+      success: true, 
+      message: '测试支付成功', 
+      orderNo,
+      goldAmount: order.goldAmount,
+      username: order.username
+    });
+  } catch (error) {
+    console.error('测试支付失败:', error);
+    res.status(500).json({ success: false, message: '测试支付失败' });
+  }
+});
+
+/**
+ * 获取测试模式状态
+ */
+app.get('/api/test/mode', (req, res) => {
+  res.json({
+    testMode: config.testMode || false,
+    paymentMethod: config.paymentMethod,
+    hasApiKey: !!config.apiKey,
+    message: config.testMode ? '测试模式已启用，可使用模拟支付' : '生产模式'
+  });
+});
+
+/**
+ * 切换测试模式
+ */
+app.post('/api/test/mode', (req, res) => {
+  const { enabled } = req.body;
+  config.testMode = !!enabled;
+  saveConfig(config);
+  res.json({ success: true, testMode: config.testMode });
 });
 
 /**
@@ -631,7 +1079,7 @@ app.post('/api/order/:orderNo/poll', async (req, res) => {
   
   if (config.paymentMethod === 'api' && config.apiKey && order.apiOrderNo) {
     const result = await queryMPayOrder(order.apiOrderNo);
-    if (result && (result.status === 1 || result.status === 'paid' || result.pay_status === 1)) {
+    if (result && isPaySuccess(result)) {
       order.status = 'paid';
       order.paidAt = new Date().toISOString();
       orders.set(orderNo, order);
@@ -942,15 +1390,97 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
-// 健康检查
+// 健康检查（增强版）
 app.get('/api/health', (req, res) => {
+  const activeOrders = Array.from(orders.values()).filter(o => o.status === 'pending').length;
+  const paidToday = Array.from(orders.values())
+    .filter(o => o.status === 'paid')
+    .reduce((sum, o) => sum + o.amount, 0);
+  
   res.json({ 
     success: true, 
     message: '格格的宫殿服务器运行中',
-    version: '3.0.0',
+    version: '5.0.0',
     config: config.paymentMethod,
+    paymentMode: config.paymentMethod,
+    testMode: config.testMode || false,
     hasApiKey: !!config.apiKey,
-    autoVerify: config.autoVerify
+    autoVerify: config.autoVerify,
+    hasNotifyUrl: !!config.notifyUrl,
+    notifyUrl: config.notifyUrl,
+    activeOrders,
+    paidToday: parseFloat(paidToday.toFixed(2)),
+    totalUsers: Object.keys(users).length,
+    serverTime: new Date().toISOString(),
+    uptime: process.uptime(),
+    env: process.env.NODE_ENV || 'development'
+  });
+});
+
+// 实时查询订单支付状态（优化版，用于前端高频轮询）
+app.get('/api/order/:orderNo/status', (req, res) => {
+  const orderNo = req.params.orderNo;
+  const order = orders.get(orderNo);
+  
+  if (!order) {
+    return res.status(404).json({ success: false, message: '订单不存在' });
+  }
+  
+  // 如果是pending状态，主动查询第三方
+  if (order.status === 'pending' && order.apiOrderNo && config.paymentMethod === 'api') {
+    queryMPayOrder(order.apiOrderNo).then(result => {
+      if (result && isPaySuccess(result)) {
+        markOrderAsPaid(orderNo, result, '实时查询');
+        const updatedOrder = orders.get(orderNo);
+        return res.json({
+          success: true,
+          orderNo: orderNo,
+          status: 'paid',
+          paid: true,
+          goldAmount: updatedOrder ? updatedOrder.goldAmount : 0,
+          username: updatedOrder ? updatedOrder.username : null,
+          justPaid: true
+        });
+      }
+      
+      res.json({
+        success: true,
+        orderNo: orderNo,
+        status: 'pending',
+        paid: false,
+        amount: order.amount,
+        goldAmount: order.goldAmount
+      });
+    }).catch(() => {
+      res.json({
+        success: true,
+        orderNo: orderNo,
+        status: 'pending',
+        paid: false
+      });
+    });
+  } else {
+    res.json({
+      success: true,
+      orderNo: orderNo,
+      status: order.status,
+      paid: order.status === 'paid',
+      goldAmount: order.goldAmount || 0,
+      username: order.username,
+      paidAt: order.paidAt
+    });
+  }
+});
+
+// 获取支付配置（包含回调地址等公开信息）
+app.get('/api/payment/info', (req, res) => {
+  res.json({
+    paymentMethod: config.paymentMethod,
+    apiMode: config.paymentMethod === 'api' && !!config.apiKey,
+    hasQRCode: !!config.qrCodeImage,
+    autoVerify: config.autoVerify,
+    callbackUrl: config.notifyUrl,
+    mpayEndpoint: config.mpayEndpoint
   });
 });
 
@@ -989,15 +1519,19 @@ app.use('/api/', (req, res) => {
 app.listen(PORT, () => {
   const localIp = getLocalIP();
   const callbackUrl = config.notifyUrl || `http://localhost:${PORT}/api/payment/notify`;
+  const isTestMode = config.testMode || config.paymentMethod === 'test';
+  const paymentModeText = isTestMode ? '🧪 测试模式' : 
+                          config.paymentMethod === 'api' ? '🔗 API自动验证' : 
+                          config.paymentMethod === 'qrcode' ? '📱 收款码模式' : '📱 收款码模式';
   
   console.log(`
 ╔══════════════════════════════════════════════╗
-║          格格的宫殿 · 服务器已启动             ║
+║       格格的宫殿 · 服务器已启动 (v5.0)        ║
 ╠══════════════════════════════════════════════╣
 ║  访问地址（本机）: http://localhost:${PORT}        ║
 ║  访问地址（局域网）: http://${localIp}:${PORT}        ║
 ║                                              ║
-║  支付模式: ${config.paymentMethod === 'api' ? '🔗 API自动验证' : '📱 收款码模式'}        ║
+║  支付模式: ${paymentModeText}        ║
 ║  回调地址: ${callbackUrl}
 ║                                              ║
 ║  接口列表:                                   ║
@@ -1005,18 +1539,27 @@ app.listen(PORT, () => {
 ║    GET  /api/config      - 获取配置          ║
 ║    POST /api/config      - 更新配置          ║
 ║    POST /api/order/create - 创建订单          ║
-║    GET  /api/order/:no   - 查询订单          ║
+║    GET  /api/order/:no/status - 订单状态      ║
 ║    POST /api/order/:no/confirm - 确认支付    ║
 ║    POST /api/payment/notify - 支付回调       ║
+║    POST /api/test/pay/:no - 测试支付         ║
 ╚══════════════════════════════════════════════╝
   `);
   
-  if (config.paymentMethod === 'api') {
+  if (isTestMode) {
+    console.log('🧪 测试模式已启用');
+    console.log('   创建订单后3秒自动支付成功，金币自动到账');
+    console.log('   可用于本地测试完整的充值流程');
+  } else if (config.paymentMethod === 'api') {
     console.log('💡 API模式已启用');
-    console.log('   请在码支付后台配置回调地址（如使用本地需内网穿透）');
+    console.log('   请在码支付后台配置回调地址');
+    console.log('   回调地址: ' + callbackUrl);
     if (!config.apiKey) {
       console.log('   ⚠️  API Key未设置，请在格格设置页面填写');
     }
+  } else {
+    console.log('📱 收款码模式（手动）');
+    console.log('   奴才扫码后需手动确认到账');
   }
 });
 

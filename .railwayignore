@@ -1,0 +1,51 @@
+# Android
+android/
+*.apk
+*.keystore
+
+# Archives
+*.zip
+*.tar.gz
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Temp files
+tmp/
+temp/
+*.tmp
+
+# Node modules
+node_modules/
+
+# Images (will be served from www/)
+www/images/
+albums_data/
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Docs
+*.md
+*.docx
+
+# Extras
+cloudflared.exe
+fix_policy.reg
+fix_powershell_policy.reg
+一键*.bat
+一键*.ps1
+启动*.bat
+启动*.vbs
+获取*.bat
+部署*.ps1
+*.hta
+*.cmd

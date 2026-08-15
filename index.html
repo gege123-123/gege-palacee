@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>格格的宫殿 · 爱新觉罗</title>
-<link rel="stylesheet" href="style.css?v=20260811e">
+<link rel="stylesheet" href="style.css?v=20260814m">
 </head>
 <body>
 
@@ -53,6 +53,22 @@
       <button class="save-btn" onclick="testNetwork()">🔄 重新检测</button>
     </div>
   </div>
+</div>
+
+<!-- 左侧垂直导航栏 -->
+<div id="leftNav" class="left-nav">
+  <button class="left-nav-btn" id="navAlbum" onclick="scrollToPhotoWall()" title="相册">
+    <span class="nav-icon">📿</span>
+    <span class="nav-label">相册</span>
+  </button>
+  <button class="left-nav-btn" id="navArchive" onclick="scrollToArchive()" title="档案馆">
+    <span class="nav-icon">📚</span>
+    <span class="nav-label">档案馆</span>
+  </button>
+  <button class="left-nav-btn" id="navTraining" onclick="scrollToTraining()" title="训诫馆">
+    <span class="nav-icon">📖</span>
+    <span class="nav-label">训诫馆</span>
+  </button>
 </div>
 
 <!-- 浮动设置按钮（始终可见） -->
@@ -601,61 +617,77 @@
   
   <!-- 龙椅+格格 -->
   <div class="throne-container">
-    <div class="divine-light">
-      <div class="light-ring"></div>
-      <div class="light-rays"></div>
-    </div>
-    
-    <div class="throne-bg-image">
-      <div class="throne-bg-inner"></div>
-    </div>
-    
     <div class="throne">
-      <div class="throne-top-decoration">
-        <span class="throne-pearl">●</span>
-        <span class="throne-pearl red">●</span>
-        <span class="throne-pearl">●</span>
-      </div>
-      
       <div class="throne-back">
-        <div class="throne-dragon-left">🐉</div>
-        <div class="throne-phoenix-right">🦚</div>
-        
-        <div class="throne-frame-ornament tl">✦</div>
-        <div class="throne-frame-ornament tr">✦</div>
-        <div class="throne-frame-ornament bl">✦</div>
-        <div class="throne-frame-ornament br">✦</div>
-        
-        <div class="throne-cushion">
-          <div class="cushion-pattern"></div>
-        </div>
-        
-        <div class="gege-display gege-photo-wall" id="gegeDisplay">
-          <div class="photo-wall-header">
-            <span class="photo-wall-title">💫 格格圣容 · 金銮御览</span>
-            <button class="photo-wall-upload" onclick="uploadPhotoWall()" title="上传照片">📤</button>
+        <div class="gege-photo-walls">
+          <!-- 格格2：爱新觉罗璇格格（左） -->
+          <div class="gege-single-wall" id="gegeWall2">
+            <div class="photo-wall-header">
+              <span class="photo-wall-title">👑 爱新觉罗璇格格</span>
+              <button class="photo-wall-upload" onclick="uploadGegePhotos(2)" title="上传照片">📤</button>
+            </div>
+            <div class="photo-wall-grid">
+              <div class="photo-wall-slot photo-scroll-animation" data-slot="1" id="gege2Slot1">
+                <div class="photo-placeholder"><span class="photo-icon">📸</span><span>圣容</span></div>
+              </div>
+              <div class="photo-wall-slot photo-scroll-animation" data-slot="2" id="gege2Slot2">
+                <div class="photo-placeholder"><span class="photo-icon">📸</span><span>圣容</span></div>
+              </div>
+            </div>
+            <div class="gege-gold-rank">
+              <span>🪙 璇格格累计金币：<b id="gege2Gold">0</b></span>
+            </div>
+            <button class="tribute-target-btn" id="tributeBtn2" onclick="selectTributeGege(2, this)">
+              <span>💎</span> 给璇格格上贡
+            </button>
+            <input type="file" id="gege2Input" accept="image/*" multiple max="50" style="display:none">
           </div>
-          <div class="photo-wall-grid" id="photoWallGrid">
-            <div class="photo-wall-slot" data-slot="1" onclick="viewPhotoWall(1)">
-              <div class="photo-placeholder" id="photoWallSlot1">
-                <span class="photo-icon">📸</span>
-                <span>圣容一</span>
+          
+          <!-- 格格1：瓜尔佳格格（中间） -->
+          <div class="gege-single-wall gege-wall-center" id="gegeWall1">
+            <div class="photo-wall-header">
+              <span class="photo-wall-title">👑 瓜尔佳格格</span>
+              <button class="photo-wall-upload" onclick="uploadGegePhotos(1)" title="上传照片">📤</button>
+            </div>
+            <div class="photo-wall-grid">
+              <div class="photo-wall-slot photo-scroll-animation" data-slot="1" id="gege1Slot1">
+                <div class="photo-placeholder"><span class="photo-icon">📸</span><span>圣容</span></div>
+              </div>
+              <div class="photo-wall-slot photo-scroll-animation" data-slot="2" id="gege1Slot2">
+                <div class="photo-placeholder"><span class="photo-icon">📸</span><span>圣容</span></div>
               </div>
             </div>
-            <div class="photo-wall-slot" data-slot="2" onclick="viewPhotoWall(2)">
-              <div class="photo-placeholder" id="photoWallSlot2">
-                <span class="photo-icon">📸</span>
-                <span>圣容二</span>
-              </div>
+            <div class="gege-gold-rank">
+              <span>🪙 瓜尔佳格格累计金币：<b id="gege1Gold">0</b></span>
             </div>
-            <div class="photo-wall-slot" data-slot="3" onclick="viewPhotoWall(3)">
-              <div class="photo-placeholder" id="photoWallSlot3">
-                <span class="photo-icon">📸</span>
-                <span>圣容三</span>
-              </div>
-            </div>
+            <button class="tribute-target-btn active" id="tributeBtn1" onclick="selectTributeGege(1, this)">
+              <span>💎</span> 给瓜尔佳格格上贡
+            </button>
+            <input type="file" id="gege1Input" accept="image/*" multiple max="50" style="display:none">
           </div>
-          <input type="file" id="photoWallInput" accept="image/*" multiple style="display:none">
+          
+          <!-- 格格3：爱新觉罗凌霜格格（右） -->
+          <div class="gege-single-wall" id="gegeWall3">
+            <div class="photo-wall-header">
+              <span class="photo-wall-title">👑 爱新觉罗凌霜格格</span>
+              <button class="photo-wall-upload" onclick="uploadGegePhotos(3)" title="上传照片">📤</button>
+            </div>
+            <div class="photo-wall-grid">
+              <div class="photo-wall-slot photo-scroll-animation" data-slot="1" id="gege3Slot1">
+                <div class="photo-placeholder"><span class="photo-icon">📸</span><span>圣容</span></div>
+              </div>
+              <div class="photo-wall-slot photo-scroll-animation" data-slot="2" id="gege3Slot2">
+                <div class="photo-placeholder"><span class="photo-icon">📸</span><span>圣容</span></div>
+              </div>
+            </div>
+            <div class="gege-gold-rank">
+              <span>🪙 凌霜格格累计金币：<b id="gege3Gold">0</b></span>
+            </div>
+            <button class="tribute-target-btn" id="tributeBtn3" onclick="selectTributeGege(3, this)">
+              <span>💎</span> 给凌霜格格上贡
+            </button>
+            <input type="file" id="gege3Input" accept="image/*" multiple max="50" style="display:none">
+          </div>
         </div>
       </div>
       
@@ -684,69 +716,6 @@
           <div class="stick s2"></div>
         </div>
       </div>
-    </div>
-    
-    <!-- 三宫六院 - 御用相册 -->
-    <div class="palace-gallery" id="palaceGallery">
-      <div class="gallery-header-section">
-        <div class="gallery-title">📿 格格寝宫 · 御用相册</div>
-      </div>
-      <div class="gallery-grid" id="galleryGrid">
-        <div class="gallery-slot locked" data-album="1" onclick="openAlbumLock(1)" title="密码解锁">
-          <div class="slot-frame">
-            <div class="slot-corner tl">◆</div>
-            <div class="slot-corner tr">◆</div>
-            <div class="slot-corner bl">◆</div>
-            <div class="slot-corner br">◆</div>
-            <div class="slot-content" id="gallerySlot1">
-              <div class="slot-placeholder">
-                <span class="slot-icon">📷</span>
-                <span>格格<br>日常圣容</span>
-              </div>
-            </div>
-            <div class="slot-lock">🔒</div>
-            <button class="slot-upload-btn" onclick="event.stopPropagation();uploadGalleryMedia(1)" title="上传照片">📤</button>
-          </div>
-          <div class="slot-label">📸 日常圣容</div>
-        </div>
-        
-        <div class="gallery-slot locked" data-album="2" onclick="openAlbumLock(2)" title="密码解锁">
-          <div class="slot-frame">
-            <div class="slot-corner tl">◆</div>
-            <div class="slot-corner tr">◆</div>
-            <div class="slot-corner bl">◆</div>
-            <div class="slot-corner br">◆</div>
-            <div class="slot-content" id="gallerySlot2">
-              <div class="slot-placeholder">
-                <span class="slot-icon">🎬</span>
-                <span>格格<br>训话影音</span>
-              </div>
-            </div>
-            <div class="slot-lock">🔒</div>
-            <button class="slot-upload-btn" onclick="event.stopPropagation();uploadGalleryMedia(2)" title="上传影音">📤</button>
-          </div>
-          <div class="slot-label">🎬 训话影音</div>
-        </div>
-        
-        <div class="gallery-slot locked" data-album="3" onclick="openAlbumLock(3)" title="密码解锁">
-          <div class="slot-frame">
-            <div class="slot-corner tl">◆</div>
-            <div class="slot-corner tr">◆</div>
-            <div class="slot-corner bl">◆</div>
-            <div class="slot-corner br">◆</div>
-            <div class="slot-content" id="gallerySlot3">
-              <div class="slot-placeholder">
-                <span class="slot-icon">💎</span>
-                <span>格格<br>珍藏圣容</span>
-              </div>
-            </div>
-            <div class="slot-lock">🔒</div>
-            <button class="slot-upload-btn" onclick="event.stopPropagation();uploadGalleryMedia(3)" title="上传珍藏">📤</button>
-          </div>
-          <div class="slot-label">💎 珍藏阁</div>
-        </div>
-      </div>
-      <input type="file" id="galleryInput" accept="image/*,video/*" multiple style="display:none">
     </div>
     
     <div class="kneeling-servant">
@@ -808,34 +777,25 @@
       <span class="tribute-title">奴才上贡 · 磕头孝敬</span>
       <span class="tribute-sub">奴才欲求格格一训，献上孝敬越多，跪得越久</span>
     </div>
-    <div class="tribute-grid" id="tributeGrid">
-      <!-- 动态生成的上贡项 -->
+    
+    <!-- 选择上贡给哪位格格 -->
+    <div class="gege-selector">
+      <span class="gege-selector-label">👑 献给：</span>
+      <div class="gege-selector-options">
+        <button class="gege-selector-btn active" onclick="selectTributeGege(1, this)">
+          <span>👑</span> 瓜尔佳格格
+        </button>
+        <button class="gege-selector-btn" onclick="selectTributeGege(2, this)">
+          <span>👑</span> 爱新觉罗璇格格
+        </button>
+        <button class="gege-selector-btn" onclick="selectTributeGege(3, this)">
+          <span>👑</span> 爱新觉罗凌霜格格
+        </button>
+      </div>
     </div>
     
-    <!-- 奉献排行榜 -->
-    <div class="rank-section">
-      <div class="rank-title">📊 奴才奉献榜 <button class="rank-name-btn" onclick="setUserName()">✏️ 改名字</button></div>
-      <div class="rank-list" id="rankList">
-        <div class="rank-item">
-          <span class="rank-num">1</span>
-          <span class="rank-name">恭亲王</span>
-          <span class="rank-value">🪙 88888</span>
-        </div>
-        <div class="rank-item">
-          <span class="rank-num">2</span>
-          <span class="rank-name">和珅</span>
-          <span class="rank-value">🪙 66666</span>
-        </div>
-        <div class="rank-item">
-          <span class="rank-num">3</span>
-          <span class="rank-name">纪晓岚</span>
-          <span class="rank-value">🪙 52000</span>
-        </div>
-      </div>
-      <div class="rank-my-contribution">
-        <span><span id="myRankName">奴才</span>已奉献：</span>
-        <span class="my-contrib-gold" id="myContribGold">🪙 0</span>
-      </div>
+    <div class="tribute-grid" id="tributeGrid">
+      <!-- 动态生成的上贡项 -->
     </div>
     
     <!-- 奴才训诫馆 - 阶梯式奖励 -->
@@ -974,23 +934,17 @@
   <!-- 管理员专属控件 -->
   <div class="admin-panel" id="adminPanel" style="display:none;">
     <div class="admin-panel-title">⚙ 格格控制殿</div>
-    <button class="admin-btn" onclick="openSettings()">
-      <span>⚙</span> 全部设置
-    </button>
-    <button class="admin-btn" onclick="openPaymentSettings()">
-      <span>💳</span> 支付配置
-    </button>
-    <button class="admin-btn" onclick="openBgmSettings()">
-      <span>🎵</span> 背景音乐
-    </button>
     <button class="admin-btn" onclick="uploadQRCode()">
       <span>📷</span> 收款码
     </button>
-    <button class="admin-btn" onclick="uploadMediaFromPage()">
-      <span>🖼</span> 格格像
+    <button class="admin-btn" onclick="uploadBgmFromPage()">
+      <span>🎵</span> 背景音乐
     </button>
-    <button class="admin-btn" onclick="toggleVerifyMode()">
-      <span>🔐</span> 验证开关
+    <button class="admin-btn" onclick="uploadPhotoWall()">
+      <span>🖼</span> 上传圣容
+    </button>
+    <button class="admin-btn" onclick="showGegeUploadMenu()">
+      <span>📿</span> 格格相册
     </button>
     <button class="admin-btn danger" onclick="logoutAdmin()">
       <span>🚪</span> 退出
@@ -1002,20 +956,11 @@
 <div id="settingsModal" class="modal">
   <div class="modal-content">
     <span class="modal-close" onclick="closeSettings()">&times;</span>
-    <h2 class="modal-title">🔐 格格专属设置殿</h2>
+    <h2 class="modal-title">⚙ 格格控制殿</h2>
     
-    <!-- 访问信息 -->
-    <div class="setting-section access-info-section">
-      <h3>📍 访问信息</h3>
-      <div class="access-info-box">
-        <p>🔗 本机访问：<code>http://localhost:3000</code></p>
-        <p>🌐 局域网访问：<code id="localIPDisplay">http://本机IP:3000</code></p>
-        <p>💡 格格专属口令：<strong>gege123</strong></p>
-      </div>
-    </div>
-    
+    <!-- 收款码 -->
     <div class="setting-section">
-      <h3>💳 微信收款码</h3>
+      <h3>📷 收款二维码</h3>
       <div class="upload-area" onclick="uploadQRCode()">
         <div class="upload-preview" id="qrPreview">
           <div class="upload-placeholder">
@@ -1028,95 +973,7 @@
       </div>
     </div>
     
-    <div class="setting-section">
-      <h3>👑 格格玉照 / 视频</h3>
-      <div class="upload-area" onclick="uploadMedia()">
-        <div class="upload-preview" id="mediaPreview">
-          <div class="upload-placeholder">
-            <span class="placeholder-icon">🖼</span>
-            <span>点击上传格格的照片或视频</span>
-          </div>
-        </div>
-        <input type="file" id="mediaInput" accept="image/*,video/*" style="display:none">
-        <div class="upload-btn-overlay"><span>📤 选择文件</span></div>
-      </div>
-      <div class="media-controls" id="mediaControls" style="display:none">
-        <button onclick="removeMedia()" class="btn-remove">✕ 移除</button>
-      </div>
-    </div>
-    
-    <div class="setting-section">
-      <h3>📝 格格尊号</h3>
-      <input type="text" id="gegeTitle" placeholder="例如：爱新觉罗·美丽格格" maxlength="20">
-    </div>
-    
-    <div class="setting-section">
-      <h3>🔑 奉献口令（可选）</h3>
-      <input type="text" id="verifyPasswordInput" placeholder="设置奉献口令，奴才需输入方可觐见">
-      <p class="setting-hint">设置后，奴才需输入正确口令才能进入</p>
-    </div>
-    
-    <!-- 支付配置 -->
-    <div class="payment-config-section">
-      <h3>💳 真实支付配置</h3>
-      <p class="setting-hint" style="text-align:center;margin-bottom:12px;">选择支付模式，实现扫码自动验证</p>
-      
-      <div class="payment-method-selector">
-        <div class="method-option active" onclick="selectPaymentMethod('qrcode', this)">
-          <div class="method-icon">📱</div>
-          <div class="method-name">收款码模式</div>
-          <div class="method-desc">使用微信/支付宝收款码</div>
-        </div>
-        <div class="method-option" onclick="selectPaymentMethod('api', this)">
-          <div class="method-icon">🔗</div>
-          <div class="method-name">API自动验证</div>
-          <div class="method-desc">扫码付款后自动验证</div>
-        </div>
-      </div>
-      
-      <!-- 收款码模式 -->
-      <div id="qrcodeModePanel">
-        <div class="payment-notice-box">
-          <strong>📱 收款码模式说明：</strong><br>
-          使用格格自己的微信/支付宝收款码，奴才扫码后需要手动确认。适合不想对接第三方的格格。
-        </div>
-      </div>
-      
-      <!-- API模式 -->
-      <div id="apiModePanel" style="display:none">
-        <div class="payment-notice-box warning">
-          <strong>⚠️ API模式说明：</strong><br>
-          需要注册码支付/BufPay等免签收款平台账号。奴才付款后系统自动验证，无需手动确认。<br>
-          推荐平台：码支付(mpays.cn)、BufPay.com 等
-        </div>
-        
-        <input type="text" id="mpayEndpointInput" class="payment-config-input" placeholder="支付API地址（默认：https://api.mpays.cn）" value="https://api.mpays.cn">
-        <input type="text" id="apiKeyInput" class="payment-config-input" placeholder="API Key（平台分配）">
-        <input type="text" id="apiSecretInput" class="payment-config-input" placeholder="API Secret（平台分配）">
-        <input type="text" id="notifyUrlInput" class="payment-config-input" placeholder="回调地址（如不填则自动生成）">
-        
-        <div class="payment-config-toggle">
-          <div class="toggle-switch" id="autoVerifyToggle" onclick="toggleAutoVerify()"></div>
-          <span class="toggle-label">开启自动验证（付款后自动通过）</span>
-        </div>
-        
-        <div class="payment-notice-box" style="margin-top:10px;">
-          <strong>📝 回调地址配置：</strong><br>
-          请将以下地址配置到码支付平台的回调设置中：<br>
-          <code style="color:#FFD700;" id="notifyUrlDisplay">http://localhost:3000/api/payment/notify</code><br>
-          <small>⚠️ 公网访问需使用内网穿透（如ngrok、花生壳等）</small>
-        </div>
-        
-        <div class="payment-notice-box" style="margin-top:10px;background:rgba(0,100,200,0.1);border-color:#0064C8;">
-          <strong>🔍 对接流程：</strong><br>
-          1️⃣ 注册码支付账号，获取 API Key 和 Secret<br>
-          2️⃣ 在码支付后台设置回调地址<br>
-          3️⃣ 填写上方配置，保存设置<br>
-          4️⃣ 奴才扫码付款 → 系统自动验证 → 立即进入
-        </div>
-      </div>
-    </div>
-    
+    <!-- 背景音乐 -->
     <div class="setting-section" id="bgmSettingSection">
       <h3>🎵 背景音乐</h3>
       <div class="upload-area" onclick="uploadBgm()">
@@ -1133,10 +990,37 @@
         <button onclick="toggleBgmPlay()" class="btn-remove" id="bgmPlayBtn">▶ 播放</button>
         <button onclick="removeBgm()" class="btn-remove" style="background:#5a3a10">✕ 移除</button>
       </div>
-      <p class="setting-hint">格格上传的音乐将在宫殿中循环播放（奴才进入时自动播放）</p>
     </div>
     
-    <button class="save-btn big" onclick="saveSettings()">💾 保存设置</button>
+    <!-- 格格相册上传 -->
+    <div class="setting-section">
+      <h3>👑 格格相册管理</h3>
+      <div class="gege-upload-tabs">
+        <button class="gege-tab active" onclick="switchGegeTab(1, this)">瓜尔佳格格</button>
+        <button class="gege-tab" onclick="switchGegeTab(2, this)">爱新觉罗璇格格</button>
+        <button class="gege-tab" onclick="switchGegeTab(3, this)">爱新觉罗凌霜格格</button>
+      </div>
+      <div class="upload-area" id="gegeUploadArea" onclick="uploadGegePhotos(currentGegeTab)">
+        <div class="upload-preview" id="gegeUploadPreview">
+          <div class="upload-placeholder">
+            <span class="placeholder-icon">🖼</span>
+            <span>点击上传圣容（支持多张，最多50张）</span>
+          </div>
+        </div>
+      </div>
+      <p class="setting-hint">当前格格已上传 <span id="gegeUploadCount">0</span> 张圣容</p>
+      
+      <!-- 照片列表管理 -->
+      <div class="gege-photo-list-header">
+        <span>📋 已上传照片列表</span>
+        <button class="btn-small" onclick="uploadGegePhotos(currentGegeTab)">➕ 添加照片</button>
+      </div>
+      <div class="gege-photo-list" id="gegePhotoList">
+        <!-- 照片列表动态生成 -->
+      </div>
+      <button class="btn-cancel" onclick="clearGegePhotos(currentGegeTab)" style="width:100%;margin-top:8px;">🗑 清空当前格格圣容</button>
+    </div>
+    
   </div>
 </div>
 
@@ -1233,20 +1117,11 @@
 <!-- Toast提示 -->
 <div id="toast" class="toast"></div>
 
-<!-- 训诫馆快速跳转按钮 -->
-<a href="javascript:void(0)" class="training-quick-btn" id="trainingQuickBtn" onclick="scrollToTraining()">🔥 训诫馆</a>
-
-<!-- 档案馆快速跳转按钮 -->
-<a href="javascript:void(0)" class="archive-quick-btn" id="archiveQuickBtn" onclick="scrollToArchive()">📚 档案馆</a>
-
-<!-- 相册快速跳转按钮 -->
-<a href="javascript:void(0)" class="gallery-quick-btn" id="galleryQuickBtn" onclick="scrollToGallery()">📿 相册</a>
-
 <!-- 返回顶部按钮 -->
 <a href="javascript:void(0)" class="back-top-btn" id="backTopBtn" onclick="scrollToTop()">⬆ 顶部</a>
 
 <script src="archive_data.js?v=20260810k"></script>
 <script src="training_data.js?v=20260810k"></script>
-<script src="app.js?v=20260811e"></script>
+<script src="app.js?v=20260815c"></script>
 </body>
 </html>

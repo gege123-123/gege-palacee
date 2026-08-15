@@ -25,8 +25,22 @@ var state = {
   // 真实支付相关
   currentOrder: null,
   serverConfig: null,
-  paymentPollingTimer: null
+  paymentPollingTimer: null,
+  // 三个格格独立相册
+  gegePhotos: {
+    1: [],
+    2: [],
+    3: []
+  },
+  gegeIndex: { 1: 0, 2: 0, 3: 0 },
+  gegeAnimation: { 1: true, 2: true, 3: true },
+  gegeScrollTimer: { 1: null, 2: null, 3: null },
+  gegeGold: { 1: 0, 2: 0, 3: 0 },
+  currentGegeTab: 1
 };
+
+// 全局变量（兼容旧代码）
+var currentGegeTab = 1;
 
 // ============ 服务器API交互 ============
 // 动态获取API基础地址，确保手机端也能正常访问
@@ -237,7 +251,7 @@ async function userLogin() {
     
     closeUserLoginModal();
     updateUserInfoBar();
-    loadGoldFromServer();
+    syncLocalAccountFromServer();
     showToast('奴才' + data.user.servantName + ' 觐见成功！', 3000);
   } else {
     showToast(data ? data.message : '登录失败');
@@ -257,7 +271,11 @@ async function userLogout() {
   state.kneelCount = 0;
   localStorage.removeItem('gege_user_token');
   localStorage.removeItem('gege_servant_name');
+  localStorage.removeItem('gege_local_gold');
+  localStorage.removeItem('gege_local_kneel');
+  localStorage.removeItem('gege_local_total_tributed');
   
+  for (var g = 1; g <= 3; g++) stopGegeScrollAnimation(g);
   updateUserInfoBar();
   updateGoldDisplay();
   updateRankDisplay();
@@ -307,6 +325,9 @@ async function loadGoldFromServer() {
       username: data.user.username,
       servantName: data.user.servantName
     };
+    localStorage.setItem('gege_local_gold', state.gold.toString());
+    localStorage.setItem('gege_local_kneel', state.kneelCount.toString());
+    localStorage.setItem('gege_local_total_tributed', state.totalTributed.toString());
     updateGoldDisplay();
     updateUserInfoBar();
     updateRankDisplay();
@@ -323,6 +344,7 @@ async function syncGoldToServer(delta, reason) {
   
   if (data && data.success) {
     state.gold = data.gold;
+    localStorage.setItem('gege_local_gold', state.gold.toString());
     updateGoldDisplay();
     updateUserInfoBar();
     return true;
@@ -340,6 +362,7 @@ async function syncKneelToServer() {
   
   if (data && data.success) {
     state.kneelCount = data.kneelCount;
+    localStorage.setItem('gege_local_kneel', state.kneelCount.toString());
     updateUserInfoBar();
   }
 }
@@ -347,11 +370,69 @@ async function syncKneelToServer() {
 // 检查登录状态
 function checkUserLogin() {
   var token = localStorage.getItem('gege_user_token');
+  var username = localStorage.getItem('gege_user_name');
+  var servantName = localStorage.getItem('gege_servant_name');
+  
   if (token) {
     state.userToken = token;
+    
+    if (username) {
+      state.userName = username;
+    }
+    if (servantName) {
+      state.currentUser = {
+        username: username || '',
+        servantName: servantName
+      };
+    }
+    
+    var savedGold = localStorage.getItem('gege_local_gold');
+    if (savedGold !== null) {
+      state.gold = parseInt(savedGold) || 0;
+    }
+    var savedKneel = localStorage.getItem('gege_local_kneel');
+    if (savedKneel !== null) {
+      state.kneelCount = parseInt(savedKneel) || 0;
+    }
+    var savedTotal = localStorage.getItem('gege_local_total_tributed');
+    if (savedTotal !== null) {
+      state.totalTributed = parseInt(savedTotal) || 0;
+    }
+    
+    if (state.currentUser) {
+      updateUserInfoBar();
+      updateGoldDisplay();
+    }
+    
     loadGoldFromServer();
   } else {
     showUserLoginModal();
+  }
+}
+
+async function syncLocalAccountFromServer() {
+  if (!state.userToken) return;
+  
+  var data = await apiRequest('/api/user/info');
+  if (data && data.success) {
+    state.gold = data.user.gold;
+    state.totalTributed = data.user.totalTributed;
+    state.kneelCount = data.user.kneelCount;
+    state.currentUser = {
+      username: data.user.username,
+      servantName: data.user.servantName
+    };
+    state.userName = data.user.username;
+    
+    localStorage.setItem('gege_user_name', data.user.username);
+    localStorage.setItem('gege_servant_name', data.user.servantName);
+    localStorage.setItem('gege_local_gold', state.gold.toString());
+    localStorage.setItem('gege_local_kneel', state.kneelCount.toString());
+    localStorage.setItem('gege_local_total_tributed', state.totalTributed.toString());
+    
+    updateGoldDisplay();
+    updateUserInfoBar();
+    updateRankDisplay();
   }
 }
 
@@ -563,66 +644,147 @@ async function generateRechargeQR() {
   rechargePayModal.classList.add('active');
   closeRecharge();
   
-  // 如果配置了API模式
-  if (config && config.paymentMethod === 'api' && config.apiKey) {
-    // 使用真实API创建订单
-    try {
-      var result = await apiRequest('/api/order/create', {
-        method: 'POST',
-        body: {
-          amount: price,
-          description: '充值' + gold + '金币'
-        }
-      });
+  // 创建订单（必须传递用户token以便自动到账）
+  try {
+    var requestBody = {
+      amount: price,
+      description: '充值' + gold + '金币'
+    };
+    
+    // 如果有用户token，直接在body中也传递一份（双重保险）
+    if (state.userToken) {
+      requestBody.token = state.userToken;
+    }
+    
+    var result = await apiRequest('/api/order/create', {
+      method: 'POST',
+      body: requestBody
+    });
+    
+    if (result && result.success) {
+      state.currentRechargeOrder = {
+        orderNo: result.orderNo,
+        amount: result.amount,
+        gold: result.goldAmount || gold,
+        qrCode: result.qrCode,
+        payUrl: result.payUrl || null,
+        needRedirect: result.needRedirect || false,
+        redirectUrl: result.redirectUrl || null,
+        apiOrderNo: result.apiOrderNo || null,
+        isAutoVerify: result.isAutoVerify || false,
+        username: result.username || null,
+        hasUser: result.hasUser || false,
+        paymentMode: result.paymentMode || 'manual',
+        goldAdded: false
+      };
       
-      if (result && result.success) {
-        state.currentRechargeOrder = {
-          orderNo: result.orderNo,
-          amount: result.amount,
-          gold: gold,
-          qrCode: result.qrCode,
-          apiOrderNo: result.apiOrderNo || null,
-          isAutoVerify: result.isAutoVerify || false
-        };
+      console.log('订单创建成功:', result.orderNo, '用户绑定:', result.hasUser ? '是' : '否', '支付模式:', result.paymentMode);
+      
+      // 如果需要跳转到支付页面
+      if (result.needRedirect && result.redirectUrl) {
+        // 检查是否为APP协议链接（如alipay://、alipayqr://）
+        var isAppProtocol = result.redirectUrl.indexOf('://') > -1 && 
+                           result.redirectUrl.indexOf('http://') !== 0 && 
+                           result.redirectUrl.indexOf('https://') !== 0;
         
+        if (isAppProtocol && result.qrCode) {
+          // APP协议链接：生成二维码图片让用户扫码
+          var qrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(result.qrCode);
+          if (rechargePayQr) {
+            rechargePayQr.innerHTML = 
+              '<div class="pay-qr-scan-box">' +
+                '<img src="' + qrImageUrl + '" alt="支付二维码" style="max-width:220px;max-height:220px;border-radius:12px;border:3px solid #FFD700;background:white;">' +
+                '<p class="pay-qr-hint">📱 请使用支付宝扫描上方二维码</p>' +
+              '</div>';
+          }
+          
+          if (rechargePayInfo) {
+            rechargePayInfo.innerHTML = 
+              '<p class="pay-info-status">⏳ 请扫码支付 ¥' + price + ' (获得 ' + gold + ' 金币)</p>' +
+              '<p class="pay-info-tip">📱 打开手机支付宝 → 扫一扫 → 完成支付</p>' +
+              '<p class="pay-info-tip">✅ 支付成功后金币将自动到账</p>' +
+              '<p class="pay-info-note">💡 提示：支付链接为APP专用，PC端请扫码支付</p>';
+          }
+          
+        } else {
+          // 网页链接：同时显示二维码和跳转按钮
+          var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+          var payLink = result.qrUrl || result.payUrl || result.redirectUrl || '';
+          
+          if (rechargePayQr) {
+            var html = '';
+            
+            // 显示二维码图片（如果有）
+            if (result.qrCode) {
+              html += '<img src="' + result.qrCode + '" alt="付款二维码" style="max-width:220px;max-height:220px;border-radius:12px;border:3px solid #FFD700;display:block;margin:0 auto;">';
+            }
+            
+            // 显示跳转按钮
+            if (isMobile) {
+              html += '<div style="margin-top:15px;"><a href="' + payLink + '" target="_blank" class="pay-redirect-btn" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:25px;text-decoration:none;font-weight:bold;font-size:16px;">📱 点击前往支付宝支付 ¥' + price + '</a></div>';
+            } else {
+              html += '<p style="text-align:center;margin-top:10px;font-size:12px;color:#888;">💡 扫码支付或点击下方按钮跳转</p>';
+              html += '<div style="margin-top:10px;"><a href="' + payLink + '" target="_blank" id="payRedirectBtn" style="display:inline-block;padding:10px 20px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:20px;text-decoration:none;font-weight:bold;">🔗 前往支付宝支付 ¥' + price + '</a></div>';
+            }
+            
+            rechargePayQr.innerHTML = html;
+          }
+          
+          if (rechargePayInfo) {
+            var userHintRedirect = result.hasUser 
+              ? '<p class="pay-info-tip">✅ 已关联奴才账户，支付成功金币自动到账</p>' 
+              : '<p class="pay-info-tip">💡 请先登录以启用自动到账功能</p>';
+            
+            rechargePayInfo.innerHTML = 
+              '<p class="pay-info-status">⏳ ' + (isMobile ? '点击按钮' : '扫码') + '付款 ¥' + price + ' (获得 ' + gold + ' 金币)</p>' +
+              userHintRedirect +
+              '<p class="pay-info-timer">剩余时间：<span id="rechargePayTimer">30:00</span></p>' +
+              '<p class="pay-info-note">📱 支付成功后金币将自动充值到账户</p>';
+          }
+        }
+        
+        // 启动轮询检测支付状态
+        startRechargePolling();
+        
+      } else if (result.qrCode) {
         // 显示付款二维码
         if (rechargePayQr) {
-          var qrImg = result.qrCode 
-            ? '<img src="' + result.qrCode + '" alt="付款二维码" style="max-width:220px;max-height:220px;border-radius:12px;border:3px solid #FFD700;">' 
-            : '<div class="scan-qr-placeholder"><span>无法生成二维码<br>请使用手动模式</span></div>';
-          rechargePayQr.innerHTML = qrImg;
+          rechargePayQr.innerHTML = '<img src="' + result.qrCode + '" alt="付款二维码" style="max-width:220px;max-height:220px;border-radius:12px;border:3px solid #FFD700;">';
         }
         
         if (rechargePayInfo) {
-          rechargePayInfo.innerHTML = '<p class="pay-info-status">⏳ 请扫码付款 ¥' + price + '</p>' +
-            '<p class="pay-info-tip">支付成功后金币自动到账</p>' +
-            '<p class="pay-info-timer">剩余时间：<span id="rechargePayTimer">30:00</span></p>';
+          var userHint = result.hasUser 
+            ? '<p class="pay-info-tip">✅ 已关联奴才账户，支付成功金币自动到账</p>' 
+            : '<p class="pay-info-tip">💡 请先登录以启用自动到账功能</p>';
+          
+          rechargePayInfo.innerHTML = 
+            '<p class="pay-info-status">⏳ 请扫码付款 ¥' + price + '</p>' +
+            userHint +
+            '<p class="pay-info-timer">剩余时间：<span id="rechargePayTimer">30:00</span></p>' +
+            '<p class="pay-info-note">📱 支付成功后金币将自动充值到账户</p>';
         }
         
-        // 开始轮询验证
+        // 启动高频轮询检测支付状态
         startRechargePolling();
         
       } else {
-        showToast('创建订单失败，使用手动模式');
-        showManualRechargeQR(price, gold, qrCode);
+        // 无二维码也无支付链接
+        if (rechargePayQr) {
+          rechargePayQr.innerHTML = '<div class="scan-qr-placeholder"><span>无法生成付款码<br>请使用手动模式</span></div>';
+        }
+        if (rechargePayInfo) {
+          rechargePayInfo.innerHTML = '<p class="pay-info-status">❌ 支付方式暂时不可用</p><p class="pay-info-tip">请联系格格客服</p>';
+        }
       }
-    } catch (error) {
-      console.error('创建订单失败:', error);
+      
+    } else {
+      console.warn('订单创建失败，降级为手动模式');
       showManualRechargeQR(price, gold, qrCode);
     }
-  } else if (qrCode) {
-    // 使用收款码模式
+  } catch (error) {
+    console.error('创建订单失败:', error);
     showManualRechargeQR(price, gold, qrCode);
-  } else {
-    // 没有任何支付方式
-    if (rechargePayQr) {
-      rechargePayQr.innerHTML = '<div class="scan-qr-placeholder"><span>格格请先设置<br>收款码或API</span></div>';
-    }
-    if (rechargePayInfo) {
-      rechargePayInfo.innerHTML = '<p class="pay-info-status">❌ 未配置支付方式</p>' +
-        '<p class="pay-info-tip">请格格先登录控制殿，上传收款码或配置API</p>';
-    }
-    showToast('请格格先配置支付方式！');
+    showToast('创建订单失败，请使用手动收款码');
   }
 }
 
@@ -650,6 +812,7 @@ function startRechargePolling() {
   var pollCount = 0;
   var rechargePayHint = document.getElementById('rechargePayHint');
   
+  // 使用新的状态查询接口（更快速、更可靠）
   rechargePollingTimer = setInterval(async function() {
     var timerEl = document.getElementById('rechargePayTimer');
     if (timerEl) {
@@ -669,31 +832,28 @@ function startRechargePolling() {
     }
     
     if (state.currentRechargeOrder && state.currentRechargeOrder.orderNo) {
-      var result = await apiRequest('/api/order/' + state.currentRechargeOrder.orderNo);
+      // 使用优化的状态查询接口（服务器端会主动查询第三方）
+      var result = await apiRequest('/api/order/' + state.currentRechargeOrder.orderNo + '/status');
       
       if (result && result.success && result.status === 'paid') {
+        console.log('检测到支付成功，金币已到账');
         stopRechargePolling();
         confirmRechargeSuccess();
         return;
       }
       
-      // 每10次轮询（约30秒），主动查询第三方
-      if (pollCount % 10 === 0 && state.currentRechargeOrder.apiOrderNo) {
-        if (rechargePayHint) rechargePayHint.style.display = 'block';
-        
-        var pollResult = await apiRequest('/api/order/' + state.currentRechargeOrder.orderNo + '/poll', {
-          method: 'POST'
-        });
-        
-        if (rechargePayHint) rechargePayHint.style.display = 'none';
-        
-        if (pollResult && pollResult.success && pollResult.status === 'paid') {
-          stopRechargePolling();
-          confirmRechargeSuccess();
+      // 每20次轮询（约60秒），显示查询提示
+      if (pollCount % 20 === 0) {
+        if (rechargePayHint) {
+          rechargePayHint.textContent = '🔄 正在查询支付状态...';
+          rechargePayHint.style.display = 'block';
+          setTimeout(function() {
+            if (rechargePayHint) rechargePayHint.style.display = 'none';
+          }, 2000);
         }
       }
     }
-  }, 3000);
+  }, 3000); // 每3秒查询一次
 }
 
 function stopRechargePolling() {
@@ -704,39 +864,123 @@ function stopRechargePolling() {
 }
 
 function confirmRechargeSuccess() {
-  if (state.currentRechargeOrder) {
+  if (state.currentRechargeOrder && !state.currentRechargeOrder.goldAdded) {
     var gold = state.currentRechargeOrder.gold;
-    state.gold += gold;
-    saveGold();
-    updateGoldDisplay();
-    updateUserInfoBar();
+    var orderNo = state.currentRechargeOrder.orderNo;
     
-    // 同步到服务器
-    syncGoldToServer(gold, '充值获得');
+    console.log('确认充值成功：订单', orderNo, '金币', gold);
     
-    showToast('🎉 充值成功！获得 ' + gold + ' 金币');
+    // 服务器已经通过回调或轮询自动加了金币
+    // 这里从服务器同步最新金币（确保不重复计算）
+    if (state.userToken) {
+      // 从服务器获取最新用户信息
+      apiRequest('/api/user/info').then(function(userData) {
+        if (userData && userData.success) {
+          state.gold = userData.user.gold;
+          state.totalTributed = userData.user.totalTributed;
+          state.kneelCount = userData.user.kneelCount;
+          state.currentUser = {
+            username: userData.user.username,
+            servantName: userData.user.servantName
+          };
+          
+          // 保存到本地
+          localStorage.setItem('gege_local_gold', state.gold.toString());
+          localStorage.setItem('gege_local_kneel', state.kneelCount.toString());
+          localStorage.setItem('gege_local_total_tributed', state.totalTributed.toString());
+          
+          updateGoldDisplay();
+          updateUserInfoBar();
+          updateRankDisplay();
+        }
+        
+        showRechargeSuccessUI(gold);
+      }).catch(function() {
+        // 如果同步失败，仍然显示成功
+        showRechargeSuccessUI(gold);
+      });
+    } else {
+      // 无登录用户，本地加金币（较少使用）
+      state.gold += gold;
+      saveGold();
+      updateGoldDisplay();
+      updateUserInfoBar();
+      showRechargeSuccessUI(gold);
+    }
     
-    var rechargePayModal = document.getElementById('rechargePayModal');
-    if (rechargePayModal) rechargePayModal.classList.remove('active');
-    
-    state.currentRechargeOrder = null;
+    state.currentRechargeOrder.goldAdded = true;
   }
 }
 
-function confirmRechargePaid() {
-  if (state.currentRechargeOrder) {
-    // 自动验证已通过或手动确认
-    confirmRechargeSuccess();
+function showRechargeSuccessUI(gold) {
+  showToast('🎉 充值成功！获得 ' + gold + ' 金币', 3000);
+  
+  // 更新金币数字的动画效果
+  var goldEl = document.getElementById('goldAmount');
+  if (goldEl) {
+    goldEl.classList.add('gold-bounce');
+    setTimeout(function() {
+      goldEl.classList.remove('gold-bounce');
+    }, 500);
+  }
+  
+  var rechargePayModal = document.getElementById('rechargePayModal');
+  if (rechargePayModal) {
+    rechargePayModal.innerHTML = 
+      '<div class="recharge-success">' +
+        '<div class="success-icon">🎉</div>' +
+        '<h2>奉献成功！</h2>' +
+        '<p>获得 <span class="success-gold">' + gold + '</span> 金币</p>' +
+        '<p class="success-tip">奴才叩谢格格恩典！</p>' +
+        '<button class="close-success-btn" onclick="closeRechargePay()">关闭</button>' +
+      '</div>';
+  }
+  
+  setTimeout(function() {
+    closeRechargePay();
+    // 恢复充值弹窗内容
+    var modal = document.getElementById('rechargePayModal');
+    if (modal) {
+      modal.classList.remove('active');
+      // 重置内容
+      setTimeout(function() {
+        var qrEl = document.getElementById('rechargePayQr');
+        var infoEl = document.getElementById('rechargePayInfo');
+        if (qrEl) qrEl.innerHTML = '';
+        if (infoEl) infoEl.innerHTML = '';
+      }, 300);
+    }
+  }, 2000);
+}
+
+async function confirmRechargePaid() {
+  if (state.currentRechargeOrder && state.currentRechargeOrder.orderNo) {
+    // 调用服务器确认支付接口（会自动加金币）
+    var result = await apiRequest('/api/order/' + state.currentRechargeOrder.orderNo + '/confirm', {
+      method: 'POST'
+    });
+    
+    if (result && result.success) {
+      confirmRechargeSuccess();
+    } else {
+      showToast('确认失败：' + (result ? result.message : '未知错误'));
+    }
   } else {
-    // 手动模式：直接加金币
     var amount = state.selectedRecharge;
     var gold = getRechargeGold(amount);
+    
+    // 手动模式：直接本地加金币
     state.gold += gold;
     saveGold();
     updateGoldDisplay();
     updateUserInfoBar();
-    // 同步到服务器
-    syncGoldToServer(gold, '充值获得');
+    
+    // 如果已登录，同步到服务器
+    if (state.userToken) {
+      syncGoldToServer(gold, '充值获得');
+    }
+    
+    addGegeGold(selectedTributeGege || 1, gold);
     showToast('🎉 奉献成功！获得 ' + gold + ' 金币');
     closeRechargePay();
   }
@@ -1285,6 +1529,54 @@ var tributeItems = [
   { type: 'everything',   emoji: '💀', name: '倾家荡产', cost: 99999,msg: '奴才倾家荡产，只求格格垂怜！' }
 ];
 
+// 当前选中的奉献格格
+var selectedTributeGege = 1;
+
+// 选择奉献给哪位格格
+function selectTributeGege(gegeId, btn) {
+  selectedTributeGege = gegeId;
+  
+  // 更新旧版选择器按钮
+  var oldButtons = document.querySelectorAll('.gege-selector-btn');
+  oldButtons.forEach(function(b) { b.classList.remove('active'); });
+  
+  // 更新新版相册下的上贡按钮
+  var newButtons = document.querySelectorAll('.tribute-target-btn');
+  newButtons.forEach(function(b) { b.classList.remove('active'); });
+  
+  // 激活当前按钮
+  if (btn) btn.classList.add('active');
+  
+  // 同步激活对应的所有按钮
+  var oldBtn = document.querySelector('.gege-selector-btn[onclick*="' + gegeId + '"]');
+  if (oldBtn) oldBtn.classList.add('active');
+  var newBtn = document.getElementById('tributeBtn' + gegeId);
+  if (newBtn && newBtn !== btn) newBtn.classList.add('active');
+  
+  // 保存选择
+  localStorage.setItem('gege_selected_tribute', gegeId);
+  
+  var gegeName = GEGE_NAMES[gegeId];
+  showToast('将奉献给：' + gegeName);
+}
+
+// 恢复上次选择的格格
+function restoreTributeGege() {
+  var saved = localStorage.getItem('gege_selected_tribute');
+  if (saved) {
+    var gegeId = parseInt(saved);
+    selectedTributeGege = gegeId;
+    
+    // 更新旧版按钮
+    var oldButtons = document.querySelectorAll('.gege-selector-btn');
+    if (oldButtons[gegeId - 1]) oldButtons[gegeId - 1].classList.add('active');
+    
+    // 更新新版按钮
+    var newBtn = document.getElementById('tributeBtn' + gegeId);
+    if (newBtn) newBtn.classList.add('active');
+  }
+}
+
 function renderTributeGrid() {
   var grid = document.getElementById('tributeGrid');
   if (!grid) return;
@@ -1338,6 +1630,9 @@ function offerTribute(type) {
     saveTotalTributed();
     updateRankDisplay();
     
+    // 给选中的格格增加金币
+    addGegeGold(selectedTributeGege, cost);
+    
     // 同步到服务器 - 奉献
     syncGoldToServer(-cost, '奉献' + item.name);
   }
@@ -1346,7 +1641,7 @@ function offerTribute(type) {
   if (state.userToken && cost > 0) {
     apiRequest('/api/user/tribute', {
       method: 'POST',
-      body: { type: type, cost: cost, name: item.name }
+      body: { type: type, cost: cost, name: item.name, gegeId: selectedTributeGege }
     });
   }
   
@@ -1357,7 +1652,7 @@ function offerTribute(type) {
     showTributeEffect(item.emoji, cost);
   }
   
-  showToast(item.msg, 3000);
+  showToast('✅ 奉献给 ' + GEGE_NAMES[selectedTributeGege] + '：' + item.msg, 3000);
 }
 
 function showTributeEffect(emoji, cost) {
@@ -1522,6 +1817,296 @@ function uploadMediaFromPage() {
   if (input) input.click();
 }
 
+// 格格照片配置
+var GEGE_NAMES = {
+  1: '瓜尔佳格格',
+  2: '爱新觉罗璇格格',
+  3: '爱新觉罗凌霜格格'
+};
+
+// 切换格格Tab（控制殿内）
+function switchGegeTab(gegeId, btn) {
+  currentGegeTab = gegeId;
+  state.currentGegeTab = gegeId;
+  
+  var tabs = document.querySelectorAll('.gege-tab');
+  tabs.forEach(function(t) { t.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  
+  var preview = document.getElementById('gegeUploadPreview');
+  var count = state.gegePhotos[gegeId] ? state.gegePhotos[gegeId].length : 0;
+  var countEl = document.getElementById('gegeUploadCount');
+  if (countEl) countEl.textContent = count;
+  
+  if (preview && count > 0) {
+    var firstPhoto = state.gegePhotos[gegeId][0];
+    preview.innerHTML = '<img src="' + firstPhoto.url + '" style="max-width:100%;max-height:150px;">';
+  } else if (preview) {
+    preview.innerHTML = '<div class="upload-placeholder"><span class="placeholder-icon">🖼</span><span>点击上传圣容（支持多张，最多50张）</span></div>';
+  }
+  
+  // 渲染照片列表
+  renderGegePhotoList(gegeId);
+}
+
+// 兼容旧函数名 - 打开设置弹窗
+function uploadPhotoWall() {
+  if (!state.isAdmin) {
+    showToast('请格格先登录控制殿');
+    return;
+  }
+  openSettings();
+}
+
+// 从控制殿菜单上传
+function showGegeUploadMenu() {
+  if (!state.isAdmin) {
+    showToast('请格格先登录控制殿');
+    return;
+  }
+  openSettings();
+}
+
+// 上传格格照片（支持多张）
+function uploadGegePhotos(gegeId) {
+  if (!state.isAdmin) {
+    showToast('请格格先登录控制殿');
+    return;
+  }
+  
+  if (gegeId === undefined || gegeId === null) {
+    gegeId = currentGegeTab;
+  }
+  
+  var inputId = 'gege' + gegeId + 'Input';
+  var input = document.getElementById(inputId);
+  if (!input) {
+    input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.id = inputId;
+  }
+  input.value = '';
+  input.click();
+}
+
+// 绑定格格照片上传事件（在初始化时调用）
+function bindGegeUploadInputs() {
+  for (var g = 1; g <= 3; g++) {
+    (function(gegeId) {
+      var input = document.getElementById('gege' + gegeId + 'Input');
+      if (!input) return;
+      
+      input.addEventListener('change', function(e) {
+        var files = Array.from(e.target.files);
+        if (!files || files.length === 0) return;
+        
+        var remaining = Math.max(0, 50 - state.gegePhotos[gegeId].length);
+        var toUpload = files.slice(0, remaining);
+        
+        if (files.length > remaining) {
+          showToast(GEGE_NAMES[gegeId] + '：最多50张，已截取前' + remaining + '张');
+        }
+        
+        var processed = 0;
+        var uploadedPhotos = [];
+        
+        function processFile(file) {
+          var reader = new FileReader();
+          reader.onload = function(event) {
+            uploadedPhotos.push({
+              url: event.target.result,
+              name: file.name
+            });
+            processed++;
+            if (processed < toUpload.length) {
+              processFile(toUpload[processed]);
+            } else {
+              state.gegePhotos[gegeId] = state.gegePhotos[gegeId].concat(uploadedPhotos);
+              saveGegePhotos(gegeId);
+              startGegeScrollAnimation(gegeId);
+              renderGegeWall(gegeId);
+              renderGegePhotoList(gegeId);
+              
+              var countEl = document.getElementById('gegeUploadCount');
+              if (countEl) countEl.textContent = state.gegePhotos[gegeId].length;
+              
+              showToast(GEGE_NAMES[gegeId] + '圣容上传成功！共' + state.gegePhotos[gegeId].length + '张');
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+        
+        processFile(toUpload[0]);
+      });
+    })(g);
+  }
+}
+
+// 保存格格照片到localStorage
+function saveGegePhotos(gegeId) {
+  localStorage.setItem('gege_photos_' + gegeId, JSON.stringify(state.gegePhotos[gegeId]));
+}
+
+// 加载格格照片
+function loadGegePhotos(gegeId) {
+  var saved = localStorage.getItem('gege_photos_' + gegeId);
+  if (saved) {
+    try {
+      state.gegePhotos[gegeId] = JSON.parse(saved);
+    } catch(e) {
+      state.gegePhotos[gegeId] = [];
+    }
+  }
+  
+  var goldSaved = localStorage.getItem('gege_gold_' + gegeId);
+  if (goldSaved) {
+    state.gegeGold[gegeId] = parseInt(goldSaved) || 0;
+  }
+}
+
+// 渲染单个格格的照片墙
+function renderGegeWall(gegeId) {
+  var photos = state.gegePhotos[gegeId];
+  var slots = ['gege' + gegeId + 'Slot1', 'gege' + gegeId + 'Slot2'];
+  
+  for (var i = 0; i < slots.length; i++) {
+    var slot = document.getElementById(slots[i]);
+    if (!slot) continue;
+    
+    if (photos && photos.length > 0) {
+      var photoIndex = (state.gegeIndex[gegeId] + i) % photos.length;
+      slot.innerHTML = '<img src="' + photos[photoIndex].url + '" style="width:100%;height:100%;object-fit:cover;" onclick="viewGegePhoto(' + gegeId + ',' + photoIndex + ')">';
+    } else {
+      slot.innerHTML = '<div class="photo-placeholder"><span class="photo-icon">📸</span><span>圣容</span></div>';
+    }
+  }
+  
+  var goldEl = document.getElementById('gege' + gegeId + 'Gold');
+  if (goldEl) goldEl.textContent = state.gegeGold[gegeId] || 0;
+}
+
+// 启动滚动动画
+function startGegeScrollAnimation(gegeId) {
+  stopGegeScrollAnimation(gegeId);
+  
+  if (!state.gegePhotos[gegeId] || state.gegePhotos[gegeId].length < 2) return;
+  
+  state.gegeAnimation[gegeId] = true;
+  state.gegeScrollTimer[gegeId] = setInterval(function() {
+    if (!state.gegeAnimation[gegeId]) return;
+    var total = state.gegePhotos[gegeId].length;
+    state.gegeIndex[gegeId] = (state.gegeIndex[gegeId] + 1) % total;
+    renderGegeWall(gegeId);
+  }, 2500);
+}
+
+// 停止滚动动画
+function stopGegeScrollAnimation(gegeId) {
+  state.gegeAnimation[gegeId] = false;
+  if (state.gegeScrollTimer[gegeId]) {
+    clearInterval(state.gegeScrollTimer[gegeId]);
+    state.gegeScrollTimer[gegeId] = null;
+  }
+}
+
+// 查看格格大图
+function viewGegePhoto(gegeId, index) {
+  var photos = state.gegePhotos[gegeId];
+  if (!photos || !photos[index]) return;
+  
+  var viewer = document.getElementById('photoViewer');
+  if (!viewer) {
+    viewer = document.createElement('div');
+    viewer.id = 'photoViewer';
+    viewer.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:10000;display:flex;align-items:center;justify-content:center;';
+    viewer.onclick = function() { viewer.style.display = 'none'; };
+    document.body.appendChild(viewer);
+  }
+  viewer.innerHTML = '<img src="' + photos[index].url + '" style="max-width:90%;max-height:90%;object-fit:contain;border:3px solid #FFD700;border-radius:10px;">';
+  viewer.style.display = 'flex';
+}
+
+// 清空格格照片
+function clearGegePhotos(gegeId) {
+  if (!state.isAdmin) {
+    showToast('请格格先登录控制殿');
+    return;
+  }
+  if (!confirm('确定要清空' + GEGE_NAMES[gegeId] + '的所有圣容吗？')) return;
+  
+  state.gegePhotos[gegeId] = [];
+  localStorage.removeItem('gege_photos_' + gegeId);
+  stopGegeScrollAnimation(gegeId);
+  renderGegeWall(gegeId);
+  renderGegePhotoList(gegeId);
+  
+  var countEl = document.getElementById('gegeUploadCount');
+  if (countEl) countEl.textContent = '0';
+  
+  showToast(GEGE_NAMES[gegeId] + '圣容已清空');
+}
+
+// 渲染照片列表（控制殿内显示）
+function renderGegePhotoList(gegeId) {
+  var listEl = document.getElementById('gegePhotoList');
+  if (!listEl) return;
+  
+  var photos = state.gegePhotos[gegeId] || [];
+  
+  if (photos.length === 0) {
+    listEl.innerHTML = '';
+    return;
+  }
+  
+  var html = '';
+  for (var i = 0; i < photos.length; i++) {
+    html += '<div class="gege-photo-item" onclick="viewGegePhoto(' + gegeId + ',' + i + ')">';
+    html += '<img src="' + photos[i].url + '" alt="照片' + (i + 1) + '">';
+    html += '<span class="photo-index">' + (i + 1) + '</span>';
+    html += '<button class="photo-delete-btn" onclick="removeGegePhoto(' + gegeId + ',' + i + ', event)" title="删除">✕</button>';
+    html += '</div>';
+  }
+  listEl.innerHTML = html;
+}
+
+// 删除单个照片
+function removeGegePhoto(gegeId, index, event) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  if (!state.isAdmin) {
+    showToast('请格格先登录控制殿');
+    return;
+  }
+  if (!confirm('确定要删除第 ' + (index + 1) + ' 张圣容吗？')) return;
+  
+  state.gegePhotos[gegeId].splice(index, 1);
+  saveGegePhotos(gegeId);
+  
+  if (state.gegePhotos[gegeId].length < 2) {
+    stopGegeScrollAnimation(gegeId);
+  }
+  
+  renderGegeWall(gegeId);
+  renderGegePhotoList(gegeId);
+  
+  var countEl = document.getElementById('gegeUploadCount');
+  if (countEl) countEl.textContent = state.gegePhotos[gegeId].length;
+  
+  showToast('圣容已删除');
+}
+
+// 增加格格金币
+function addGegeGold(gegeId, amount) {
+  if (!state.gegeGold[gegeId]) state.gegeGold[gegeId] = 0;
+  state.gegeGold[gegeId] += amount;
+  localStorage.setItem('gege_gold_' + gegeId, state.gegeGold[gegeId]);
+  renderGegeWall(gegeId);
+}
+
 var qrInput = document.getElementById('qrInput');
 if (qrInput) {
   qrInput.addEventListener('change', function(e) {
@@ -1606,25 +2191,11 @@ function removeMedia() {
 
 // ============ 保存设置 ============
 function openSettings() {
-  var title = localStorage.getItem('gege_title');
-  var desc = localStorage.getItem('gege_desc');
-  var titleInput = document.getElementById('gegeTitle');
-  var descInput = document.getElementById('gegeDesc');
-  
-  if (title && titleInput) titleInput.value = title;
-  
-  // 加载口令设置
-  var savedPassword = localStorage.getItem('gege_verify_password');
-  var verifyInput = document.getElementById('verifyPasswordInput');
-  if (verifyInput && savedPassword) {
-    verifyInput.value = savedPassword;
-  }
-  
   var qrCode = localStorage.getItem('gege_qr_code');
   if (qrCode) {
     var qrPreview = document.getElementById('qrPreview');
     if (qrPreview) {
-      qrPreview.innerHTML = '<img src="' + qrCode + '" alt="收款码预览">';
+      qrPreview.innerHTML = '<img src="' + qrCode + '" alt="收款码预览" style="max-width:100%;max-height:150px;">';
     }
   } else {
     var qrPreview = document.getElementById('qrPreview');
@@ -1633,27 +2204,27 @@ function openSettings() {
     }
   }
   
-  var mediaData = localStorage.getItem('gege_media');
-  var mediaType = localStorage.getItem('gege_media_type');
-  if (mediaData) {
-    var mediaPreview = document.getElementById('mediaPreview');
-    if (mediaPreview) {
-      if (mediaType === 'video') {
-        mediaPreview.innerHTML = '<video src="' + mediaData + '" controls></video>';
-      } else {
-        mediaPreview.innerHTML = '<img src="' + mediaData + '" alt="预览">';
-      }
+  // 初始化格格Tab
+  var tabs = document.querySelectorAll('.gege-tab');
+  tabs.forEach(function(t) { t.classList.remove('active'); });
+  if (tabs[currentGegeTab - 1]) tabs[currentGegeTab - 1].classList.add('active');
+  
+  // 更新当前格格的上传预览和数量
+  var currentPhotos = state.gegePhotos[currentGegeTab] || [];
+  var countEl = document.getElementById('gegeUploadCount');
+  if (countEl) countEl.textContent = currentPhotos.length;
+  
+  var preview = document.getElementById('gegeUploadPreview');
+  if (preview) {
+    if (currentPhotos.length > 0) {
+      preview.innerHTML = '<img src="' + currentPhotos[0].url + '" style="max-width:100%;max-height:150px;">';
+    } else {
+      preview.innerHTML = '<div class="upload-placeholder"><span class="placeholder-icon">🖼</span><span>点击上传圣容（支持多张，最多50张）</span></div>';
     }
-    var controls = document.getElementById('mediaControls');
-    if (controls) controls.style.display = 'block';
-  } else {
-    var mediaPreview = document.getElementById('mediaPreview');
-    if (mediaPreview) {
-      mediaPreview.innerHTML = '<div class="upload-placeholder"><span class="placeholder-icon">🖼</span><span>点击上传格格的照片或视频</span></div>';
-    }
-    var controls = document.getElementById('mediaControls');
-    if (controls) controls.style.display = 'none';
   }
+  
+  // 渲染照片列表
+  renderGegePhotoList(currentGegeTab);
   
   var modal = document.getElementById('settingsModal');
   if (modal) modal.classList.add('active');
@@ -1662,6 +2233,22 @@ function openSettings() {
 function closeSettings() {
   var modal = document.getElementById('settingsModal');
   if (modal) modal.classList.remove('active');
+}
+
+// 从控制殿按钮直接打开BGM上传
+function uploadBgmFromPage() {
+  if (!state.isAdmin) {
+    showToast('请格格先登录控制殿');
+    return;
+  }
+  openSettings();
+  var bgmInput = document.getElementById('bgmInput');
+  if (bgmInput) bgmInput.click();
+}
+
+// 清空照片墙（兼容旧调用，清空当前格格）
+function clearPhotoWall() {
+  clearGegePhotos(currentGegeTab);
 }
 
 // ============ 支付配置功能 ============
@@ -1757,47 +2344,8 @@ async function syncPaymentConfigToServer() {
 }
 
 function saveSettings() {
-  var titleInput = document.getElementById('gegeTitle');
-  var passwordInput = document.getElementById('verifyPasswordInput');
-  
-  var title = titleInput ? titleInput.value.trim() : '';
-  
-  if (title) localStorage.setItem('gege_title', title);
-  
-  // 保存口令
-  var password = passwordInput ? passwordInput.value.trim() : '';
-  if (password) {
-    localStorage.setItem('gege_verify_password', password);
-    state.verifyPassword = password;
-    state.verifyEnabled = true;
-  } else {
-    localStorage.removeItem('gege_verify_password');
-    state.verifyPassword = '';
-    state.verifyEnabled = false;
-  }
-  
-  // 保存支付配置
-  var mpayEndpointInput = document.getElementById('mpayEndpointInput');
-  var apiKeyInput = document.getElementById('apiKeyInput');
-  var apiSecretInput = document.getElementById('apiSecretInput');
-  var notifyUrlInput = document.getElementById('notifyUrlInput');
-  
-  if (mpayEndpointInput) paymentConfig.mpayEndpoint = mpayEndpointInput.value.trim();
-  if (apiKeyInput) paymentConfig.apiKey = apiKeyInput.value.trim();
-  if (apiSecretInput) paymentConfig.apiSecret = apiSecretInput.value.trim();
-  if (notifyUrlInput) paymentConfig.notifyUrl = notifyUrlInput.value.trim();
-  
-  localStorage.setItem('gege_payment_config', JSON.stringify(paymentConfig));
-  
-  // 同步到服务器
-  syncPaymentConfigToServer();
-  
   closeSettings();
-  
-  var nameEl = document.querySelector('.gege-name');
-  if (nameEl && title) nameEl.textContent = title;
-  
-  showToast('格格设置保存成功！');
+  showToast('格格设置已保存！');
 }
 
 // ============ Toast提示 ============
@@ -2479,77 +3027,28 @@ function loadGallerySlots() {
   }
 }
 
-// ============ 照片墙功能 ============
-var photoWallInput = document.getElementById('photoWallInput');
-if (photoWallInput) {
-  photoWallInput.addEventListener('change', function(e) {
-    var files = e.target.files;
-    if (!files || files.length === 0) return;
-    
-    var processed = 0;
-    var newPhotos = [];
-    
-    for (var i = 0; i < Math.min(files.length, 3); i++) {
-      (function(file, index) {
-        var reader = new FileReader();
-        reader.onload = function(event) {
-          var dataUrl = event.target.result;
-          newPhotos[index] = dataUrl;
-          processed++;
-          if (processed === files.length || processed === 3) {
-            for (var j = 0; j < newPhotos.length; j++) {
-              if (newPhotos[j]) {
-                localStorage.setItem('gege_photowall_' + (j + 1), newPhotos[j]);
-                var slot = document.getElementById('photoWallSlot' + (j + 1));
-                if (slot) {
-                  slot.innerHTML = '<img src="' + newPhotos[j] + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;border:2px solid var(--bright-gold);">';
-                }
-              }
-            }
-            showToast('照片墙更新成功！');
-          }
-        };
-        reader.readAsDataURL(file);
-      })(files[i], i);
-    }
-    
-    photoWallInput.value = '';
-  });
-}
+// ============ 照片墙功能已迁移至格格独立相册 ============
 
-function uploadPhotoWall() {
-  if (!state.isAdmin) {
-    showToast('请格格先登录控制殿');
-    return;
+function scrollToPhotoWall() {
+  var photoSection = document.getElementById('gegeDisplay');
+  if (photoSection && photoSection.scrollIntoView) {
+    photoSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
-  var input = document.getElementById('photoWallInput');
-  if (input) input.click();
-}
-
-function viewPhotoWall(slotNum) {
-  var data = localStorage.getItem('gege_photowall_' + slotNum);
-  if (!data) {
-    showToast('此位置暂无照片');
-    return;
-  }
-  var modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.style.zIndex = '10000';
-  modal.innerHTML = '<div class="modal-content" style="background:rgba(0,0,0,0.9);max-width:95vw;padding:10px;">' +
-    '<span style="position:absolute;top:10px;right:15px;color:#fff;cursor:pointer;font-size:24px;" onclick="this.closest(\'.modal-overlay\').remove()">×</span>' +
-    '<img src="' + data + '" style="max-width:90vw;max-height:80vh;border-radius:10px;">' +
-  '</div>';
-  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
-  document.body.appendChild(modal);
-}
-
-function loadPhotoWall() {
-  for (var i = 1; i <= 3; i++) {
-    var data = localStorage.getItem('gege_photowall_' + i);
-    var slot = document.getElementById('photoWallSlot' + i);
-    if (data && slot) {
-      slot.innerHTML = '<img src="' + data + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;border:2px solid var(--bright-gold);">';
+  for (var g = 1; g <= 3; g++) {
+    if (state.gegePhotos[g] && state.gegePhotos[g].length >= 2) {
+      startGegeScrollAnimation(g);
     }
+  }
+}
+
+function scrollToArchive() {
+  openArchivePage();
+}
+
+function scrollToTraining() {
+  var trainingSection = document.getElementById('trainingSection');
+  if (trainingSection && trainingSection.scrollIntoView) {
+    trainingSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 }
 
@@ -2733,17 +3232,7 @@ function scrollToTop() {
 }
 
 function updateTrainingQuickBtn() {
-  var btn = document.getElementById('trainingQuickBtn');
-  var archiveBtn = document.getElementById('archiveQuickBtn');
-  var galleryBtn = document.getElementById('galleryQuickBtn');
   var topBtn = document.getElementById('backTopBtn');
-  var palacePage = document.getElementById('page-palace');
-  
-  var showBtns = palacePage && palacePage.classList.contains('active');
-  
-  if (btn) btn.classList.toggle('show', showBtns);
-  if (archiveBtn) archiveBtn.classList.toggle('show', showBtns);
-  if (galleryBtn) galleryBtn.classList.toggle('show', showBtns);
   
   if (topBtn) {
     var scrolled = window.scrollY > 300;
@@ -2830,12 +3319,217 @@ function switchArchiveTab(tabElement, tabName) {
 // ============ 启动时加载 ============
 function loadGalleryAndTraining() {
   loadGallerySlots();
-  loadPhotoWall();
+  
+  for (var i = 1; i <= 3; i++) {
+    loadGegePhotos(i);
+    renderGegeWall(i);
+    if (state.gegePhotos[i].length >= 2) {
+      startGegeScrollAnimation(i);
+    }
+  }
+  bindGegeUploadInputs();
+  
   loadTrainingTiers();
   renderTributeGrid();
   checkGalleryLock();
 }
 
-// 启动
+// ============ 新版支付配置UI处理 ============
+function initPaymentConfigUI() {
+  var statusEl = document.getElementById('paymentConfigStatus');
+  var formEl = document.getElementById('paymentConfigForm');
+  if (!statusEl || !formEl) return;
+  
+  // 从服务器获取配置
+  apiRequest('/api/config').then(function(config) {
+    if (config) {
+      // 填充表单
+      var methodEl = document.getElementById('paymentMethod');
+      if (methodEl) {
+        // 确保有测试模式选项
+        var hasTestOption = false;
+        for (var i = 0; i < methodEl.options.length; i++) {
+          if (methodEl.options[i].value === 'test') hasTestOption = true;
+        }
+        if (!hasTestOption) {
+          var opt = document.createElement('option');
+          opt.value = 'test';
+          opt.textContent = '🧪 测试模式（模拟支付）';
+          methodEl.appendChild(opt);
+        }
+        methodEl.value = config.paymentMethod || 'qrcode';
+      }
+      
+      var apiKeyEl = document.getElementById('apiKey');
+      if (apiKeyEl && config.apiKey && config.apiKey.indexOf('***') === -1) {
+        apiKeyEl.value = config.apiKey;
+      }
+      
+      var apiSecretEl = document.getElementById('apiSecret');
+      if (apiSecretEl && config.apiSecret && config.apiSecret.indexOf('***') === -1) {
+        apiSecretEl.value = config.apiSecret;
+      }
+      
+      var endpointEl = document.getElementById('mpayEndpoint');
+      if (endpointEl) endpointEl.value = config.mpayEndpoint || 'https://api.mpays.cn';
+      
+      var notifyEl = document.getElementById('notifyUrl');
+      if (notifyEl) notifyEl.value = config.notifyUrl || '';
+      
+      var autoVerifyEl = document.getElementById('autoVerify');
+      if (autoVerifyEl) autoVerifyEl.checked = config.autoVerify || false;
+      
+      onPaymentMethodChange();
+      
+      statusEl.style.display = 'none';
+      formEl.style.display = 'block';
+      
+      // 显示当前状态
+      showPaymentStatus(config);
+    } else {
+      statusEl.innerHTML = '<span class="status-error">❌ 无法连接服务器</span>';
+    }
+  }).catch(function() {
+    statusEl.innerHTML = '<span class="status-error">❌ 无法连接服务器</span>';
+  });
+}
+
+function showPaymentStatus(config) {
+  var statusDiv = document.getElementById('paymentConfigStatus');
+  if (!statusDiv || statusDiv.style.display === 'none') return;
+  
+  var statusText = '';
+  if (config.testMode || config.paymentMethod === 'test') {
+    statusText = '🧪 <strong>测试模式</strong> - 创建订单后3秒自动支付成功';
+  } else if (config.paymentMethod === 'api' && config.hasApiKey) {
+    statusText = '✅ <strong>API模式已配置</strong> - 支付自动到账';
+  } else if (config.paymentMethod === 'api') {
+    statusText = '⚠️ <strong>API模式</strong> - 请填写API Key';
+  } else if (config.hasQRCode) {
+    statusText = '📱 <strong>收款码模式</strong> - 需手动确认';
+  } else {
+    statusText = '❌ <strong>未配置</strong> - 请选择支付模式';
+  }
+  
+  var notifyInfo = config.notifyUrl ? '<br>📍 回调地址: ' + config.notifyUrl : '';
+  statusDiv.innerHTML = '<div style="padding:10px;background:rgba(255,215,0,0.1);border-radius:8px;">' + statusText + notifyInfo + '</div>';
+  statusDiv.style.display = 'block';
+}
+
+function onPaymentMethodChange() {
+  var methodEl = document.getElementById('paymentMethod');
+  if (!methodEl) return;
+  
+  var method = methodEl.value;
+  var apiMode = method === 'api';
+  var testMode = method === 'test';
+  
+  // 显示/隐藏API相关字段
+  document.getElementById('apiKeyRow').style.display = apiMode ? 'flex' : 'none';
+  document.getElementById('apiSecretRow').style.display = apiMode ? 'flex' : 'none';
+  document.getElementById('endpointRow').style.display = apiMode ? 'flex' : 'none';
+  document.getElementById('notifyUrlRow').style.display = apiMode ? 'flex' : 'none';
+  document.getElementById('autoVerifyRow').style.display = apiMode ? 'flex' : 'none';
+  
+  // 测试模式提示
+  var tipsEl = document.querySelector('.payment-tips');
+  if (tipsEl) {
+    if (testMode) {
+      tipsEl.innerHTML = '<p class="tip-title">🧪 测试模式说明：</p>' +
+        '<p>1. 奴才创建订单后，系统将在3秒后自动模拟支付成功</p>' +
+        '<p>2. 金币会自动到账，无需真实扫码支付</p>' +
+        '<p>3. 用于测试完整的充值流程</p>' +
+        '<p class="tip-warn">⚠️ 测试模式下不是真实支付</p>';
+    } else if (apiMode) {
+      tipsEl.innerHTML = '<p class="tip-title">📖 自动充值说明：</p>' +
+        '<p>1. 去码支付/BufPay平台注册账号，获取API Key和Secret</p>' +
+        '<p>2. 配置回调地址（需公网访问）</p>' +
+        '<p>3. 奴才扫码支付后，金币自动到账，无需手动确认</p>' +
+        '<p class="tip-warn">⚠️ 生产环境建议部署到云服务器（Render/Railway）</p>';
+    } else {
+      tipsEl.innerHTML = '<p class="tip-title">📖 收款码模式说明：</p>' +
+        '<p>1. 上传格格的微信/支付宝收款码</p>' +
+        '<p>2. 奴才扫码支付后，需要手动点击"确认到账"</p>' +
+        '<p class="tip-warn">💡 建议使用API模式实现自动到账</p>';
+    }
+  }
+}
+
+async function savePaymentConfig() {
+  var methodEl = document.getElementById('paymentMethod');
+  var apiKeyEl = document.getElementById('apiKey');
+  var apiSecretEl = document.getElementById('apiSecret');
+  var endpointEl = document.getElementById('mpayEndpoint');
+  var notifyEl = document.getElementById('notifyUrl');
+  var autoVerifyEl = document.getElementById('autoVerify');
+  
+  var method = methodEl ? methodEl.value : 'qrcode';
+  
+  var config = {
+    paymentMethod: method,
+    testMode: method === 'test',
+    apiKey: apiKeyEl ? apiKeyEl.value.trim() : '',
+    apiSecret: apiSecretEl ? apiSecretEl.value.trim() : '',
+    mpayEndpoint: endpointEl ? endpointEl.value.trim() : 'https://api.mpays.cn',
+    notifyUrl: notifyEl ? notifyEl.value.trim() : '',
+    autoVerify: autoVerifyEl ? autoVerifyEl.checked : false
+  };
+  
+  // 验证
+  if (method === 'api' && !config.apiKey) {
+    showToast('请填写API Key！');
+    return;
+  }
+  
+  try {
+    var result = await apiRequest('/api/config', {
+      method: 'POST',
+      body: config
+    });
+    
+    if (result && result.success) {
+      showToast('✅ 支付配置保存成功！');
+      
+      if (method === 'test') {
+        showToast('🧪 测试模式已启用，可前往页面测试充值流程', 5000);
+      } else if (method === 'api' && !config.notifyUrl) {
+        var localIp = getLocalIP();
+        var defaultNotify = 'http://' + localIp + ':3000/api/payment/notify';
+        showToast('💡 回调地址：' + defaultNotify, 5000);
+      }
+    } else {
+      showToast('保存失败：' + (result ? result.message : '未知错误'));
+    }
+  } catch (error) {
+    showToast('保存失败，请检查网络连接');
+  }
+}
+
+function testPaymentConfig() {
+  showToast('🧪 正在测试服务器连接...');
+  
+  apiRequest('/api/health').then(function(result) {
+    if (result && result.success) {
+      var msg = '✅ 服务器连接成功！\n';
+      msg += '版本: ' + result.version + '\n';
+      msg += '支付模式: ' + result.paymentMode + '\n';
+      msg += '测试模式: ' + (result.testMode ? '✅ 开启' : '❌ 关闭') + '\n';
+      msg += '活跃订单: ' + result.activeOrders + '\n';
+      msg += '用户数: ' + result.totalUsers;
+      showToast(msg, 5000);
+    } else {
+      showToast('❌ 服务器连接失败');
+    }
+  }).catch(function() {
+    showToast('❌ 无法连接到服务器');
+  });
+}
+
+function openPaymentDoc() {
+  showToast('📖 获取API Key:\n1. 访问码支付/BufPay官网\n2. 注册并登录\n3. 在"API管理"页面获取Key和Secret', 5000);
+}
+
+// ============ 启动时加载 ============
 init();
 loadGalleryAndTraining();
+initPaymentConfigUI();

@@ -8,5 +8,18 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 20
+      - key: NODE_ENV
+        value: production
+      - key: PAYMENT_METHOD
+        value: api
+      - key: MPAY_API_KEY
+        sync: false
+      - key: MPAY_API_SECRET
+        sync: false
+      - key: MPAY_ENDPOINT
+        value: https://api.mpays.cn
+      - key: PUBLIC_URL
+        fromGenerate: domain
     healthCheckPath: /api/health
     autoDeploy: true
+    region: singapore

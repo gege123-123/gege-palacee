@@ -1407,9 +1407,11 @@ app.get('/api/stats', (req, res) => {
 });
 
 // 健康检查（增强版）
-// Railway 健康检查端点
+// Railway 健康检查端点 - 必须返回200纯文本
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
+  console.log('【健康检查】收到 /health 请求');
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('OK');
 });
 
 app.get('/api/health', (req, res) => {

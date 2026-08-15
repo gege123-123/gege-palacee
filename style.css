@@ -2891,6 +2891,17 @@ html, body {
   }
 }
 
+/* 桌面端：确保三个wall都显示（不受active-wall限制） */
+@media (min-width: 769px) {
+  .gege-single-wall {
+    display: flex !important;
+    flex-direction: column;
+  }
+  .gege-mobile-tabs {
+    display: none !important;
+  }
+}
+
 .training-warning {
   color: #FF3030 !important;
   font-size: 18px !important;

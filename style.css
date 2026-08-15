@@ -2799,6 +2799,10 @@ html, body {
   border-color: #FFD700;
 }
 
+.hidden {
+  display: none !important;
+}
+
 /* 手机端适配 */
 @media (max-width: 768px) {
   .throne-container {
@@ -2830,58 +2834,33 @@ html, body {
     margin: 0;
   }
   
-  /* 手机端：三个相册改为单墙展示模式，通过tab切换 */
+  /* 手机端：三个相册纵向堆叠，全部可见 */
   .gege-photo-walls {
-    top: 5px;
+    position: relative;
+    top: auto;
     left: 0;
     right: 0;
-    bottom: 5px;
+    bottom: auto;
     flex-direction: column;
-    gap: 0;
+    gap: 10px;
     justify-content: flex-start;
-    padding: 0 5px;
-  }
-  
-  /* 手机端：Tab切换栏 */
-  .gege-mobile-tabs {
+    padding: 10px 5px;
+    height: auto;
+    min-height: 720px;
     display: flex;
-    gap: 6px;
-    margin-bottom: 6px;
-    padding: 5px;
-    background: linear-gradient(90deg, #3d1a0a, #1a0804);
-    border: 2px solid #DAA520;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.6);
   }
   
-  .gege-mobile-tab {
-    flex: 1;
-    padding: 8px 4px;
-    background: linear-gradient(135deg, #3d2817, #1a0f08);
-    border: 1px solid #8B4513;
-    border-radius: 6px;
-    color: #DAA520;
-    font-size: 12px;
-    font-weight: bold;
-    cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    transition: all 0.3s;
+  /* 手机端：隐藏Tab切换栏（三墙全显示不需要tab） */
+  .gege-mobile-tabs {
+    display: none !important;
   }
   
-  .gege-mobile-tab.active {
-    background: linear-gradient(135deg, #B8860B, #8B4513);
-    border-color: #FFD700;
-    color: #fff;
-    box-shadow: 0 0 10px rgba(255,215,0,0.5);
-  }
-  
-  /* 手机端：每个相册全宽显示，只有激活的可见 */
+  /* 手机端：每个相册全宽显示，全部可见 */
   .gege-single-wall {
-    display: none;
+    display: flex;
+    flex-direction: column;
     width: 100%;
-    padding: 5px;
+    padding: 6px;
     background: rgba(20, 10, 0, 0.35);
     border: 1px solid #DAA520;
     border-radius: 8px;
@@ -2900,7 +2879,7 @@ html, body {
   }
   
   .gege-single-wall .photo-wall-title {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: bold;
   }
   
@@ -2911,14 +2890,13 @@ html, body {
   }
   
   .gege-single-wall .photo-wall-grid {
-    flex: 1;
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
   
   .gege-single-wall .photo-wall-slot {
     aspect-ratio: 3/4;
-    min-height: 250px;
+    min-height: 280px;
     width: 100%;
   }
   
@@ -2939,7 +2917,7 @@ html, body {
   }
   
   .gege-wall-center .photo-wall-title {
-    font-size: 17px;
+    font-size: 16px;
   }
   
   .gege-wall-center .tribute-target-btn.active {

@@ -2022,31 +2022,7 @@ function confirmGegeUpload(gegeId) {
 var MOBILE_WALL_KEY = 'gege_mobile_wall';
 
 function switchMobileWall(gegeId) {
-  // 更新所有wall的active状态
-  for (var i = 1; i <= 3; i++) {
-    var wall = document.getElementById('gegeWall' + i);
-    if (wall) {
-      if (i === gegeId) {
-        wall.classList.add('active-wall');
-      } else {
-        wall.classList.remove('active-wall');
-      }
-    }
-  }
   // 更新tab按钮active状态
-  var tabs = document.querySelectorAll('.gege-mobile-tab');
-  if (tabs) {
-    for (var t = 0; t < tabs.length; t++) {
-      var tabId = parseInt(tabs[t].getAttribute('data-gege-id') || '0');
-      // 检查tab文本对应的格格
-      if (tabId === gegeId) {
-        tabs[t].classList.add('active');
-      } else {
-        tabs[t].classList.remove('active');
-      }
-    }
-  }
-  // 更可靠的方式：按index更新
   var mobileTabs = document.getElementById('gegeMobileTabs');
   if (mobileTabs) {
     var btns = mobileTabs.querySelectorAll('.gege-mobile-tab');
@@ -2059,14 +2035,9 @@ function switchMobileWall(gegeId) {
   }
   
   // 同步控制殿中的tab
-  if (typeof switchGegeTab === 'function') {
-    var adminTabs = document.querySelectorAll('.gege-upload-tabs .gege-tab');
-    for (var a = 0; a < adminTabs.length; a++) adminTabs[a].classList.remove('active');
-    if (adminTabs[gegeId - 1]) adminTabs[gegeId - 1].classList.add('active');
-    currentGegeTab = gegeId;
-    if (typeof renderGegePhotoList === 'function') {
-      renderGegePhotoList(gegeId);
-    }
+  currentGegeTab = gegeId;
+  if (typeof renderGegePhotoList === 'function') {
+    renderGegePhotoList(gegeId);
   }
   
   try { localStorage.setItem(MOBILE_WALL_KEY, gegeId); } catch(e) {}
@@ -2079,12 +2050,11 @@ function initMobileWall() {
     if (v) savedId = parseInt(v) || 1;
   } catch(e) {}
   
-  // 初始化只有当前wall可见（手机端）
+  // 手机端三墙全显示，桌面端也全显示
   for (var i = 1; i <= 3; i++) {
     var wall = document.getElementById('gegeWall' + i);
     if (wall) {
-      if (i === savedId) wall.classList.add('active-wall');
-      else wall.classList.remove('active-wall');
+      wall.classList.add('active-wall');
     }
   }
   
@@ -2099,23 +2069,11 @@ function initMobileWall() {
   }
   
   currentGegeTab = savedId;
-  // 监听resize，如果从桌面变成手机，重新初始化可见wall
+  // 监听resize，确保所有wall始终可见
   window.addEventListener('resize', function() {
-    var isMobile = window.innerWidth <= 768;
-    if (isMobile) {
-      // 只保留当前wall可见
-      for (var i = 1; i <= 3; i++) {
-        var wall = document.getElementById('gegeWall' + i);
-        if (!wall) continue;
-        if (i === currentGegeTab) wall.classList.add('active-wall');
-        else wall.classList.remove('active-wall');
-      }
-    } else {
-      // 桌面端：取消active-wall限制，让所有wall都显示
-      for (var j = 1; j <= 3; j++) {
-        var w = document.getElementById('gegeWall' + j);
-        if (w) w.classList.remove('active-wall');
-      }
+    for (var i = 1; i <= 3; i++) {
+      var wall = document.getElementById('gegeWall' + i);
+      if (wall) wall.classList.add('active-wall');
     }
   });
 }
@@ -2414,132 +2372,154 @@ function closeSettings() {
   if (modal) modal.classList.remove('active');
 }
 
-// ============ 金币管理功能 ============
+// ============ 金币管理功能（搜索奴才账户） ============
+var goldSearchResults = [];
+var selectedGoldUser = null;
+
 function updateGoldManageInfo() {
-  var nameEl = document.getElementById('goldManageUserName');
-  var goldEl = document.getElementById('goldManageCurrent');
-  
-  if (state.currentUser && state.currentUser.username) {
-    if (nameEl) nameEl.textContent = state.currentUser.username;
-  } else {
-    if (nameEl) nameEl.textContent = '未登录奴才';
-  }
-  if (goldEl) goldEl.textContent = state.gold || 0;
+  searchGoldUsers();
 }
 
-// 快速增加/扣除金币
-function quickAddGold(amount) {
+// 搜索奴才账户
+async function searchGoldUsers() {
   if (!state.isAdmin) {
     showToast('请格格先登录控制殿');
     return;
   }
-  if (!state.currentUser) {
-    showToast('请奴才先登录');
+  
+  var keyword = document.getElementById('goldSearchInput');
+  var q = keyword ? keyword.value.trim() : '';
+  var resultsEl = document.getElementById('goldSearchResults');
+  
+  if (!resultsEl) return;
+  resultsEl.innerHTML = '<div style="color:#888;text-align:center;padding:10px;">搜索中...</div>';
+  
+  try {
+    var url = '/api/admin/users/search?q=' + encodeURIComponent(q) + '&adminKey=gege123';
+    var result = await apiRequest(url);
+    
+    if (result.success && result.users) {
+      goldSearchResults = result.users;
+      renderGoldSearchResults();
+    } else {
+      resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:10px;">' + (result.message || '搜索失败') + '</div>';
+    }
+  } catch(e) {
+    resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:10px;">搜索出错</div>';
+  }
+}
+
+function renderGoldSearchResults() {
+  var resultsEl = document.getElementById('goldSearchResults');
+  if (!resultsEl) return;
+  
+  if (goldSearchResults.length === 0) {
+    resultsEl.innerHTML = '<div style="color:#888;text-align:center;padding:10px;">未找到奴才账户</div>';
     return;
   }
+  
+  var html = '';
+  for (var i = 0; i < goldSearchResults.length; i++) {
+    var u = goldSearchResults[i];
+    html += '<div style="padding:8px;margin-bottom:6px;background:rgba(0,0,0,0.3);border:1px solid #8B4513;border-radius:6px;cursor:pointer;transition:all 0.3s;" onclick="selectGoldUser(\'' + u.username + '\')">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<div>' +
+          '<span style="color:#FFD700;font-weight:bold;font-size:14px;">' + u.username + '</span>' +
+          '<span style="color:#DAA520;font-size:12px;margin-left:6px;">（' + (u.servantName || '奴才') + '）</span>' +
+        '</div>' +
+        '<div style="color:#FF4500;font-weight:bold;">🪙 ' + (u.gold || 0) + '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;font-size:11px;color:#888;margin-top:3px;">' +
+        '<span>奉献:' + (u.totalTributed || 0) + '</span>' +
+        '<span>叩拜:' + (u.kneelCount || 0) + '</span>' +
+      '</div>' +
+    '</div>';
+  }
+  resultsEl.innerHTML = html;
+}
+
+// 选中某个奴才进行金币调整
+function selectGoldUser(username) {
+  if (!state.isAdmin) return;
+  
+  var user = goldSearchResults.find(function(u) { return u.username === username; });
+  if (!user) return;
+  
+  selectedGoldUser = user;
+  
+  var detail = document.getElementById('goldManageDetail');
+  if (detail) detail.classList.remove('hidden');
+  
+  document.getElementById('goldDetailName').textContent = '👤 ' + user.username + '（' + (user.servantName || '奴才') + '）';
+  document.getElementById('goldDetailGold').textContent = user.gold || 0;
+  document.getElementById('goldDetailTributed').textContent = user.totalTributed || 0;
+  document.getElementById('goldDetailKneel').textContent = user.kneelCount || 0;
+  
+  document.getElementById('goldAdjustInput').value = '';
+  document.getElementById('goldAdjustInput').focus();
+}
+
+// 快速调整选中奴才的金币
+function adjustSelectedGold(amount) {
+  if (!state.isAdmin) { showToast('请格格先登录控制殿'); return; }
+  if (!selectedGoldUser) { showToast('请先选择一个奴才账户'); return; }
   
   var reason = amount > 0 ? '格格赏赐' : '格格扣除';
-  adjustGold(amount, reason);
+  adjustUserGold(selectedGoldUser.username, amount, reason);
 }
 
-// 手动输入金币数调整
-function manualAdjustGold() {
-  if (!state.isAdmin) {
-    showToast('请格格先登录控制殿');
-    return;
-  }
-  if (!state.currentUser) {
-    showToast('请奴才先登录');
-    return;
-  }
+// 确认自定义金额调整
+function confirmAdjustGold() {
+  if (!state.isAdmin) { showToast('请格格先登录控制殿'); return; }
+  if (!selectedGoldUser) { showToast('请先选择一个奴才账户'); return; }
   
-  var input = document.getElementById('goldManageInput');
-  if (!input || !input.value) {
-    showToast('请输入金币数量');
-    return;
-  }
+  var input = document.getElementById('goldAdjustInput');
+  if (!input || !input.value) { showToast('请输入金币数量'); return; }
   
   var amount = parseInt(input.value);
-  if (isNaN(amount)) {
-    showToast('金币数量无效');
-    return;
-  }
+  if (isNaN(amount)) { showToast('金币数量无效'); return; }
+  if (amount === 0) { showToast('数量为0，无变化'); return; }
   
   var reason = amount > 0 ? '格格手动赏赐' : '格格手动扣除';
-  if (amount === 0) {
-    showToast('数量为0，无变化');
-    return;
-  }
-  
-  adjustGold(amount, reason);
+  adjustUserGold(selectedGoldUser.username, amount, reason);
   input.value = '';
 }
 
-// 奉献模式（替代支付）
-function offerGold(amount) {
-  if (!state.isAdmin) {
-    showToast('请格格先登录控制殿');
-    return;
-  }
-  if (!state.currentUser) {
-    showToast('请奴才先登录');
-    return;
-  }
-  if (state.gold < amount) {
-    showToast('奴才金币不足，无法奉献！');
-    return;
-  }
+// 核心：调整指定用户金币
+async function adjustUserGold(username, amount, reason) {
+  if (!state.isAdmin) return;
   
-  var gegeId = currentGegeTab || 1;
-  var tributeNames = { 10: '请安奉献', 50: '虔诚叩拜', 100: '重奉献上', 500: '皇家规格' };
-  var name = tributeNames[amount] || amount + '金币奉献';
-  
-  if (!confirm('确认奴才向' + GEGE_NAMES[gegeId] + '献上 ' + amount + ' 金币（' + name + '）？')) return;
-  
-  // 扣除奴才金币
-  state.gold -= amount;
-  saveGold();
-  updateGoldDisplay();
-  
-  // 给该格格增加金币
-  addGegeGold(gegeId, amount);
-  
-  // 调用服务器同步
-  if (state.userToken) {
-    syncGoldToServer(-amount, '奉献给' + GEGE_NAMES[gegeId]);
-  }
-  
-  showToast('💎 奴才向' + GEGE_NAMES[gegeId] + '献上 ' + amount + ' 金币！');
-  
-  // 更新金币管理信息
-  updateGoldManageInfo();
-}
-
-// 调整金币核心函数
-async function adjustGold(amount, reason) {
-  if (!state.currentUser) return;
-  
-  // 本地先更新
-  state.gold = Math.max(0, (state.gold || 0) + amount);
-  saveGold();
-  updateGoldDisplay();
-  
-  // 同步到服务器
-  if (state.userToken) {
-    try {
-      var result = await syncGoldToServer(amount, reason);
-      if (result && result.success) {
+  try {
+    var result = await apiRequest('/api/admin/users/' + encodeURIComponent(username) + '/gold', {
+      method: 'POST',
+      body: { gold: amount, reason: reason, adminKey: 'gege123' }
+    });
+    
+    if (result.success) {
+      showToast('✅ ' + reason + '给 ' + username + '：' + (amount > 0 ? '+' : '') + amount + ' 金币');
+      
+      // 更新本地记录
+      var idx = goldSearchResults.findIndex(function(u) { return u.username === username; });
+      if (idx >= 0) {
+        goldSearchResults[idx].gold = result.gold;
+      }
+      if (selectedGoldUser && selectedGoldUser.username === username) {
+        selectedGoldUser.gold = result.gold;
+        document.getElementById('goldDetailGold').textContent = result.gold;
+      }
+      
+      // 如果是当前登录用户，同步更新
+      if (state.currentUser && state.currentUser.username === username) {
         state.gold = result.gold;
         saveGold();
         updateGoldDisplay();
       }
-    } catch(e) {
-      console.warn('服务器同步失败，本地已更新', e);
+    } else {
+      showToast('❌ ' + (result.message || '调整失败'));
     }
+  } catch(e) {
+    showToast('❌ 服务器错误');
   }
-  
-  showToast('✅ ' + reason + '：' + (amount > 0 ? '+' : '') + amount + ' 金币');
-  updateGoldManageInfo();
 }
 
 // 从控制殿按钮直接打开BGM上传

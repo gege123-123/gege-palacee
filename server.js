@@ -1273,6 +1273,74 @@ app.post('/api/user/gold', (req, res) => {
   }
 });
 
+// 管理员搜索用户
+app.get('/api/admin/users/search', (req, res) => {
+  try {
+    const { q, adminKey } = req.query;
+    
+    if (adminKey !== 'gege123') {
+      return res.status(401).json({ success: false, message: '格格验证失败' });
+    }
+    
+    const keyword = (q || '').trim().toLowerCase();
+    const results = [];
+    
+    for (const [username, user] of Object.entries(users)) {
+      if (!keyword || 
+          username.toLowerCase().includes(keyword) || 
+          (user.servantName && user.servantName.toLowerCase().includes(keyword))) {
+        results.push({
+          username: user.username,
+          servantName: user.servantName,
+          gold: user.gold || 0,
+          totalTributed: user.totalTributed || 0,
+          kneelCount: user.kneelCount || 0,
+          createdAt: user.createdAt
+        });
+      }
+      if (results.length >= 50) break;
+    }
+    
+    res.json({ success: true, users: results, total: results.length });
+  } catch (error) {
+    res.status(500).json({ success: false, message: '搜索失败' });
+  }
+});
+
+// 管理员调整指定用户金币
+app.post('/api/admin/users/:username/gold', (req, res) => {
+  try {
+    const { username } = req.params;
+    const { gold, reason, adminKey } = req.body;
+    
+    if (adminKey !== 'gege123') {
+      return res.status(401).json({ success: false, message: '格格验证失败' });
+    }
+    
+    const user = users[username];
+    if (!user) {
+      return res.status(404).json({ success: false, message: '奴才不存在' });
+    }
+    
+    if (typeof gold !== 'number') {
+      return res.status(400).json({ success: false, message: '金币数值无效' });
+    }
+    
+    user.gold = Math.max(0, (user.gold || 0) + gold);
+    users[username] = user;
+    saveUsers(users);
+    
+    res.json({ 
+      success: true, 
+      username: username,
+      gold: user.gold,
+      message: reason || '金币已更新'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: '调整金币失败' });
+  }
+});
+
 // 叩拜次数+1
 app.post('/api/user/kneel', (req, res) => {
   try {

@@ -8,12 +8,8 @@
     "install": "npm install"
   },
   "dependencies": {
-    "@capacitor/android": "^8.5.0",
-    "@capacitor/cli": "^8.5.0",
-    "@capacitor/core": "^8.5.0",
     "cors": "^2.8.6",
-    "crypto": "^1.0.1",
-    "express": "^4.22.2"
+    "express": "^4.18.2"
   },
   "keywords": [],
   "author": "",

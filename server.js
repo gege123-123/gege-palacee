@@ -1531,8 +1531,23 @@ app.use('/api/', (req, res) => {
   });
 });
 
+// 全局错误处理 - 确保Railway能看到错误日志
+process.on('uncaughtException', (err) => {
+  console.error('【未捕获异常】', err.message);
+  console.error(err.stack);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('【未处理拒绝】', reason);
+});
+
+console.log('【启动】正在启动服务器...');
+console.log('【环境】NODE_ENV:', process.env.NODE_ENV);
+console.log('【环境】PORT:', PORT);
+console.log('【环境】MPAY_API_KEY:', process.env.MPAY_API_KEY ? '已设置' : '未设置');
+
 // 启动服务器
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   const localIp = getLocalIP();
   const callbackUrl = config.notifyUrl || `http://localhost:${PORT}/api/payment/notify`;
   const isTestMode = config.testMode || config.paymentMethod === 'test';
@@ -1577,6 +1592,14 @@ app.listen(PORT, () => {
     console.log('📱 收款码模式（手动）');
     console.log('   奴才扫码后需手动确认到账');
   }
+  
+  console.log('【启动】服务器启动成功！监听端口:', PORT);
+});
+
+server.on('error', (err) => {
+  console.error('【启动失败】服务器启动错误:', err.message);
+  console.error(err.stack);
+  process.exit(1);
 });
 
 // 获取本机IP

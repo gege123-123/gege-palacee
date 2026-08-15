@@ -1310,7 +1310,7 @@
     "orderNo": "GEGE17867751209419F293766",
     "amount": 10,
     "description": "??????",
-    "status": "pending",
+    "status": "expired",
     "createdAt": "2026-08-15T06:25:20.941Z",
     "paidAt": null,
     "expiredAt": "2026-08-15T06:55:20.941Z",

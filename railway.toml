@@ -1,17 +1,2 @@
-[build]
-builder = "nixpacks"
-
-[build.nixpacks]
-plan = """
-{ pkgs }: {
-  deps = [
-    pkgs.nodejs-20
-  ];
-  startProcs = [
-    "node server.js"
-  ];
-}
-"""
-
 [env]
 NODE_ENV = "production"

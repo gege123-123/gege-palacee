@@ -1559,6 +1559,60 @@ html, body {
   margin-top: 5px;
 }
 
+/* 金币管理按钮样式 */
+.btn-quick-gold {
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #8B4513, #5a3010);
+  border: 1px solid #DAA520;
+  border-radius: 8px;
+  color: #FFD700;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.btn-quick-gold:hover {
+  background: linear-gradient(135deg, #B8860B, #8B4513);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(255,215,0,0.3);
+}
+.btn-quick-gold.deduct {
+  background: linear-gradient(135deg, #8B0000, #5a0000);
+  border-color: #8B4513;
+  color: #FFA500;
+}
+.btn-quick-gold.deduct:hover {
+  background: linear-gradient(135deg, #B22222, #8B0000);
+}
+
+.btn-offer {
+  padding: 10px 8px;
+  background: linear-gradient(135deg, #3d2817, #1a0f08);
+  border: 1px solid #8B4513;
+  border-radius: 8px;
+  color: #DAA520;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+  flex: 1;
+  min-width: 70px;
+}
+.btn-offer:hover {
+  background: linear-gradient(135deg, #B8860B, #8B4513);
+  color: #fff;
+  border-color: #FFD700;
+  box-shadow: 0 3px 10px rgba(255,215,0,0.3);
+}
+.btn-offer.imperial {
+  background: linear-gradient(135deg, #8B0000, #5a0000);
+  border-color: #FFD700;
+  color: #FFD700;
+}
+.btn-offer.imperial:hover {
+  background: linear-gradient(135deg, #B22222, #8B0000);
+}
+
 /* ============ 用户登录/注册样式 ============ */
 .user-login-modal {
   max-width: 360px;
@@ -2748,36 +2802,52 @@ html, body {
 /* 手机端适配 */
 @media (max-width: 768px) {
   .throne-container {
-    max-width: 95vw;
-    padding: 0 5px;
-    margin-top: 10px;
+    max-width: 100vw;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    position: relative;
+    left: 0;
+    right: 0;
+  }
+  
+  .throne {
+    width: 100%;
   }
   
   .throne-back {
     height: 720px;
     min-height: 720px;
-    border-radius: 8px;
-    border-width: 2px;
-    background: url('格格的照片.jpg') top center/cover no-repeat;
+    border-radius: 0;
+    border-width: 0;
+    border-left: none;
+    border-right: none;
+    box-shadow: none;
+    background: linear-gradient(180deg, rgba(40,20,10,0.95), rgba(20,10,5,0.98));
+    position: relative;
+    width: 100%;
+    max-width: 100vw;
+    margin: 0;
   }
   
   /* 手机端：三个相册改为单墙展示模式，通过tab切换 */
   .gege-photo-walls {
-    top: 50px;
-    left: 6px;
-    right: 6px;
-    bottom: 6px;
+    top: 5px;
+    left: 0;
+    right: 0;
+    bottom: 5px;
     flex-direction: column;
     gap: 0;
     justify-content: flex-start;
+    padding: 0 5px;
   }
   
   /* 手机端：Tab切换栏 */
   .gege-mobile-tabs {
     display: flex;
     gap: 6px;
-    margin-bottom: 8px;
-    padding: 6px;
+    margin-bottom: 6px;
+    padding: 5px;
     background: linear-gradient(90deg, #3d1a0a, #1a0804);
     border: 2px solid #DAA520;
     border-radius: 8px;
@@ -2791,7 +2861,7 @@ html, body {
     border: 1px solid #8B4513;
     border-radius: 6px;
     color: #DAA520;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: bold;
     cursor: pointer;
     white-space: nowrap;
@@ -2811,11 +2881,12 @@ html, body {
   .gege-single-wall {
     display: none;
     width: 100%;
-    padding: 8px;
+    padding: 5px;
     background: rgba(20, 10, 0, 0.35);
-    border: 2px solid #DAA520;
-    border-radius: 10px;
-    box-shadow: 0 6px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(218, 165, 32, 0.3);
+    border: 1px solid #DAA520;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 10px rgba(218, 165, 32, 0.2);
+    box-sizing: border-box;
   }
   
   .gege-single-wall.active-wall {
@@ -2824,8 +2895,8 @@ html, body {
   }
   
   .gege-single-wall .photo-wall-header {
-    padding: 6px 8px;
-    margin-bottom: 6px;
+    padding: 5px 8px;
+    margin-bottom: 5px;
   }
   
   .gege-single-wall .photo-wall-title {
@@ -2842,28 +2913,29 @@ html, body {
   .gege-single-wall .photo-wall-grid {
     flex: 1;
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+    gap: 8px;
   }
   
   .gege-single-wall .photo-wall-slot {
     aspect-ratio: 3/4;
-    min-height: 340px;
+    min-height: 250px;
+    width: 100%;
   }
   
   .gege-gold-rank {
-    font-size: 14px;
+    font-size: 13px;
     padding: 4px 8px;
-    margin-top: 6px;
+    margin-top: 5px;
   }
   
   .gege-gold-rank b {
-    font-size: 16px;
+    font-size: 15px;
   }
   
   .tribute-target-btn {
-    font-size: 13px;
+    font-size: 12px;
     padding: 6px 8px;
-    margin-top: 6px;
+    margin-top: 5px;
   }
   
   .gege-wall-center .photo-wall-title {
@@ -2871,7 +2943,7 @@ html, body {
   }
   
   .gege-wall-center .tribute-target-btn.active {
-    font-size: 14px;
+    font-size: 13px;
   }
   
   .gege-tab {
@@ -2889,6 +2961,11 @@ html, body {
   .modal-overlay .modal-content h3 {
     font-size: 17px !important;
   }
+  
+  /* 手机端：隐藏左右装饰 */
+  .throne-armrest { display: none; }
+  .incense-burner { display: none; }
+  .throne-base { display: none; }
 }
 
 /* 桌面端：确保三个wall都显示（不受active-wall限制） */

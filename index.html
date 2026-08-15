@@ -1027,6 +1027,38 @@
       <button class="btn-cancel" onclick="clearGegePhotos(currentGegeTab)" style="width:100%;margin-top:8px;">🗑 清空当前格格圣容</button>
     </div>
     
+    <!-- 金币管理 -->
+    <div class="setting-section">
+      <h3>🪙 金币管理 · 手动赏赐</h3>
+      <p class="setting-hint">格格可手动为奴才增减金币（正数增加，负数扣除）</p>
+      <div id="goldManageInfo" style="background:rgba(0,0,0,0.4);padding:8px;border-radius:6px;margin-bottom:10px;border:1px solid #8B4513;">
+        <span style="color:#FFD700;">奴才：<span id="goldManageUserName">-</span></span>
+        <span style="color:#FFD700;margin-left:10px;">当前金币：<span id="goldManageCurrent" style="font-weight:bold;color:#FF4500;">0</span></span>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <button class="btn-quick-gold" onclick="quickAddGold(10)">+10</button>
+        <button class="btn-quick-gold" onclick="quickAddGold(50)">+50</button>
+        <button class="btn-quick-gold" onclick="quickAddGold(100)">+100</button>
+        <button class="btn-quick-gold" onclick="quickAddGold(500)">+500</button>
+        <button class="btn-quick-gold" onclick="quickAddGold(1000)">+1000</button>
+        <button class="btn-quick-gold deduct" onclick="quickAddGold(-50)">-50</button>
+        <button class="btn-quick-gold deduct" onclick="quickAddGold(-100)">-100</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="number" id="goldManageInput" placeholder="输入金币数（正增负扣）" style="flex:1;padding:8px;background:rgba(0,0,0,0.5);border:1px solid #8B4513;border-radius:6px;color:#FFD700;font-size:14px;min-width:0;">
+        <button class="save-btn big" onclick="manualAdjustGold()" style="padding:8px 16px;font-size:14px;">确认</button>
+      </div>
+      <div style="margin-top:10px;">
+        <p class="setting-hint" style="color:#B8860B;">💡 奉献模式（替代支付）：</p>
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+          <button class="btn-offer" onclick="offerGold(10)">🪙10 请安奉献</button>
+          <button class="btn-offer" onclick="offerGold(50)">🪙50 虔诚叩拜</button>
+          <button class="btn-offer" onclick="offerGold(100)">🪙100 重奉献上</button>
+          <button class="btn-offer imperial" onclick="offerGold(500)">🪙500 皇家规格</button>
+        </div>
+      </div>
+    </div>
+    
   </div>
 </div>
 

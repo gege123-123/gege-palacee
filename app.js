@@ -2402,6 +2402,9 @@ function openSettings() {
   // 渲染照片列表
   renderGegePhotoList(currentGegeTab);
   
+  // 更新金币管理信息
+  updateGoldManageInfo();
+  
   var modal = document.getElementById('settingsModal');
   if (modal) modal.classList.add('active');
 }
@@ -2409,6 +2412,134 @@ function openSettings() {
 function closeSettings() {
   var modal = document.getElementById('settingsModal');
   if (modal) modal.classList.remove('active');
+}
+
+// ============ 金币管理功能 ============
+function updateGoldManageInfo() {
+  var nameEl = document.getElementById('goldManageUserName');
+  var goldEl = document.getElementById('goldManageCurrent');
+  
+  if (state.currentUser && state.currentUser.username) {
+    if (nameEl) nameEl.textContent = state.currentUser.username;
+  } else {
+    if (nameEl) nameEl.textContent = '未登录奴才';
+  }
+  if (goldEl) goldEl.textContent = state.gold || 0;
+}
+
+// 快速增加/扣除金币
+function quickAddGold(amount) {
+  if (!state.isAdmin) {
+    showToast('请格格先登录控制殿');
+    return;
+  }
+  if (!state.currentUser) {
+    showToast('请奴才先登录');
+    return;
+  }
+  
+  var reason = amount > 0 ? '格格赏赐' : '格格扣除';
+  adjustGold(amount, reason);
+}
+
+// 手动输入金币数调整
+function manualAdjustGold() {
+  if (!state.isAdmin) {
+    showToast('请格格先登录控制殿');
+    return;
+  }
+  if (!state.currentUser) {
+    showToast('请奴才先登录');
+    return;
+  }
+  
+  var input = document.getElementById('goldManageInput');
+  if (!input || !input.value) {
+    showToast('请输入金币数量');
+    return;
+  }
+  
+  var amount = parseInt(input.value);
+  if (isNaN(amount)) {
+    showToast('金币数量无效');
+    return;
+  }
+  
+  var reason = amount > 0 ? '格格手动赏赐' : '格格手动扣除';
+  if (amount === 0) {
+    showToast('数量为0，无变化');
+    return;
+  }
+  
+  adjustGold(amount, reason);
+  input.value = '';
+}
+
+// 奉献模式（替代支付）
+function offerGold(amount) {
+  if (!state.isAdmin) {
+    showToast('请格格先登录控制殿');
+    return;
+  }
+  if (!state.currentUser) {
+    showToast('请奴才先登录');
+    return;
+  }
+  if (state.gold < amount) {
+    showToast('奴才金币不足，无法奉献！');
+    return;
+  }
+  
+  var gegeId = currentGegeTab || 1;
+  var tributeNames = { 10: '请安奉献', 50: '虔诚叩拜', 100: '重奉献上', 500: '皇家规格' };
+  var name = tributeNames[amount] || amount + '金币奉献';
+  
+  if (!confirm('确认奴才向' + GEGE_NAMES[gegeId] + '献上 ' + amount + ' 金币（' + name + '）？')) return;
+  
+  // 扣除奴才金币
+  state.gold -= amount;
+  saveGold();
+  updateGoldDisplay();
+  
+  // 给该格格增加金币
+  addGegeGold(gegeId, amount);
+  
+  // 调用服务器同步
+  if (state.userToken) {
+    syncGoldToServer(-amount, '奉献给' + GEGE_NAMES[gegeId]);
+  }
+  
+  showToast('💎 奴才向' + GEGE_NAMES[gegeId] + '献上 ' + amount + ' 金币！');
+  
+  // 更新金币管理信息
+  updateGoldManageInfo();
+}
+
+// 调整金币核心函数
+async function adjustGold(amount, reason) {
+  if (!state.currentUser) return;
+  
+  // 本地先更新
+  state.gold = Math.max(0, (state.gold || 0) + amount);
+  saveGold();
+  updateGoldDisplay();
+  
+  // 同步到服务器
+  if (state.userToken) {
+    try {
+      var result = await syncGoldToServer(amount, reason);
+      if (result && result.success) {
+        state.gold = result.gold;
+        saveGold();
+        updateGoldDisplay();
+      }
+    } catch(e) {
+      console.warn('服务器同步失败，本地已更新', e);
+    }
+  }
+  
+  showToast('✅ ' + reason + '：' + (amount > 0 ? '+' : '') + amount + ' 金币');
+  updateGoldManageInfo();
 }
 
 // 从控制殿按钮直接打开BGM上传

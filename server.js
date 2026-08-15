@@ -114,20 +114,22 @@ function loadConfig() {
       if (process.env.MPAY_API_KEY) config.apiKey = process.env.MPAY_API_KEY;
       if (process.env.MPAY_API_SECRET) config.apiSecret = process.env.MPAY_API_SECRET;
       if (process.env.MPAY_ENDPOINT) config.mpayEndpoint = process.env.MPAY_ENDPOINT;
+      if (process.env.MPAY_TYPE) config.mpayType = process.env.MPAY_TYPE;
       if (process.env.PUBLIC_URL) config.notifyUrl = process.env.PUBLIC_URL + '/api/payment/notify';
       return config;
     }
   } catch (e) {}
-  // 环境变量优先
+  // 环境变量优先（云部署模式）
   return {
-    paymentMethod: process.env.PAYMENT_METHOD || 'qrcode',
+    paymentMethod: process.env.PAYMENT_METHOD || 'api',
     apiKey: process.env.MPAY_API_KEY || '',
     apiSecret: process.env.MPAY_API_SECRET || '',
     qrCodeImage: '',
     callbackUrl: '',
-    autoVerify: false,
+    autoVerify: true,
     notifyUrl: process.env.PUBLIC_URL ? process.env.PUBLIC_URL + '/api/payment/notify' : '',
-    mpayEndpoint: process.env.MPAY_ENDPOINT || 'https://api.mpays.cn',
+    mpayEndpoint: process.env.MPAY_ENDPOINT || 'https://mzf.mapay.cc/xpay/epay',
+    mpayType: process.env.MPAY_TYPE || 'alipay',
     testMode: false
   };
 }

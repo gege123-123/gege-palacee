@@ -1,0 +1,11 @@
+{
+    "paymentMethod": "api",
+    "apiKey": "YOUR_MPAY_API_KEY",
+    "apiSecret": "YOUR_MPAY_API_SECRET",
+    "qrCodeImage": "",
+    "autoVerify": true,
+    "notifyUrl": "https://your-railway-app.up.railway.app/api/payment/notify",
+    "mpayEndpoint": "https://mzf.mapay.cc/xpay/epay",
+    "testMode": false,
+    "mpayType": "alipay"
+}

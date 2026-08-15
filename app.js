@@ -662,6 +662,7 @@ async function generateRechargeQR() {
     });
     
     if (result && result.success) {
+      var paymentTypeName = result.paymentTypeName || '支付宝';
       state.currentRechargeOrder = {
         orderNo: result.orderNo,
         amount: result.amount,
@@ -675,6 +676,8 @@ async function generateRechargeQR() {
         username: result.username || null,
         hasUser: result.hasUser || false,
         paymentMode: result.paymentMode || 'manual',
+        paymentType: result.paymentType || 'alipay',
+        paymentTypeName: paymentTypeName,
         goldAdded: false
       };
       
@@ -682,6 +685,7 @@ async function generateRechargeQR() {
       
       // 如果需要跳转到支付页面
       if (result.needRedirect && result.redirectUrl) {
+        var payTypeName = result.paymentTypeName || '支付宝';
         // 检查是否为APP协议链接（如alipay://、alipayqr://）
         var isAppProtocol = result.redirectUrl.indexOf('://') > -1 && 
                            result.redirectUrl.indexOf('http://') !== 0 && 
@@ -694,14 +698,14 @@ async function generateRechargeQR() {
             rechargePayQr.innerHTML = 
               '<div class="pay-qr-scan-box">' +
                 '<img src="' + qrImageUrl + '" alt="支付二维码" style="max-width:220px;max-height:220px;border-radius:12px;border:3px solid #FFD700;background:white;">' +
-                '<p class="pay-qr-hint">📱 请使用支付宝扫描上方二维码</p>' +
+                '<p class="pay-qr-hint">📱 请使用' + payTypeName + '扫描上方二维码</p>' +
               '</div>';
           }
           
           if (rechargePayInfo) {
             rechargePayInfo.innerHTML = 
               '<p class="pay-info-status">⏳ 请扫码支付 ¥' + price + ' (获得 ' + gold + ' 金币)</p>' +
-              '<p class="pay-info-tip">📱 打开手机支付宝 → 扫一扫 → 完成支付</p>' +
+              '<p class="pay-info-tip">📱 打开手机' + payTypeName + ' → 扫一扫 → 完成支付</p>' +
               '<p class="pay-info-tip">✅ 支付成功后金币将自动到账</p>' +
               '<p class="pay-info-note">💡 提示：支付链接为APP专用，PC端请扫码支付</p>';
           }
@@ -721,10 +725,10 @@ async function generateRechargeQR() {
             
             // 显示跳转按钮
             if (isMobile) {
-              html += '<div style="margin-top:15px;"><a href="' + payLink + '" target="_blank" class="pay-redirect-btn" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:25px;text-decoration:none;font-weight:bold;font-size:16px;">📱 点击前往支付宝支付 ¥' + price + '</a></div>';
+              html += '<div style="margin-top:15px;"><a href="' + payLink + '" target="_blank" class="pay-redirect-btn" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:25px;text-decoration:none;font-weight:bold;font-size:16px;">📱 点击前往' + payTypeName + '支付 ¥' + price + '</a></div>';
             } else {
               html += '<p style="text-align:center;margin-top:10px;font-size:12px;color:#888;">💡 扫码支付或点击下方按钮跳转</p>';
-              html += '<div style="margin-top:10px;"><a href="' + payLink + '" target="_blank" id="payRedirectBtn" style="display:inline-block;padding:10px 20px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:20px;text-decoration:none;font-weight:bold;">🔗 前往支付宝支付 ¥' + price + '</a></div>';
+              html += '<div style="margin-top:10px;"><a href="' + payLink + '" target="_blank" id="payRedirectBtn" style="display:inline-block;padding:10px 20px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:20px;text-decoration:none;font-weight:bold;">🔗 前往' + payTypeName + '支付 ¥' + price + '</a></div>';
             }
             
             rechargePayQr.innerHTML = html;

@@ -353,19 +353,31 @@ async function createMPayOrder(order) {
     
     if (jsonResp.code === 1) {
       // 成功：返回支付链接/二维码
-      // qrcode: 支付宝网页支付URL，urlscheme: 支付宝APP支付链接
       const qrcode = jsonResp.qrcode || jsonResp.qrCode || '';
       const payUrl = jsonResp.urlscheme || jsonResp.payurl || '';
       
+      // 微信支付(wxpay)不返回qrcode/payurl，需要构造支付页面URL
+      const mpayType = config.mpayType || 'alipay';
+      let finalQrUrl = qrcode;
+      let finalPayUrl = payUrl;
+      
+      if (!qrcode && !payUrl && jsonResp.trade_no) {
+        // 微信支付：使用trade_no构造支付页面URL
+        const baseUrl = endpoint.replace('/mapi.php', '');
+        finalQrUrl = `${baseUrl}/pay/${jsonResp.trade_no}`;
+        finalPayUrl = finalQrUrl;
+        console.log('微信支付模式，构造支付页面URL:', finalQrUrl);
+      }
+      
       // 生成二维码图片URL（使用公共二维码生成服务）
-      const qrImageUrl = qrcode 
-        ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=${encodeURIComponent(qrcode)}`
+      const qrImageUrl = finalQrUrl 
+        ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=${encodeURIComponent(finalQrUrl)}`
         : '';
       
       return {
-        qrCode: qrImageUrl,  // 真正的二维码图片URL
-        qrUrl: qrcode,       // 原始支付链接
-        payUrl: payUrl,      // APP支付链接
+        qrCode: qrImageUrl,
+        qrUrl: finalQrUrl,
+        payUrl: finalPayUrl,
         orderNo: jsonResp.trade_no || order.orderNo,
         amount: jsonResp.money || order.amount.toFixed(2),
         rawData: jsonResp
@@ -758,12 +770,14 @@ app.post('/api/order/create', async (req, res) => {
         orders.set(order.orderNo, order);
         saveOrders();
         
-        response.qrCode = apiOrder.qrCode;      // 二维码图片URL
-        response.qrUrl = apiOrder.qrUrl;        // 原始支付链接（用于跳转）
-        response.payUrl = apiOrder.payUrl;      // APP支付链接
+        response.qrCode = apiOrder.qrCode;
+        response.qrUrl = apiOrder.qrUrl;
+        response.payUrl = apiOrder.payUrl;
         response.apiOrderNo = apiOrder.orderNo;
         response.isAutoVerify = config.autoVerify;
         response.paymentMode = 'api';
+        response.paymentType = config.mpayType || 'alipay';
+        response.paymentTypeName = (config.mpayType === 'wxpay' || config.mpayType === 'weixin') ? '微信' : '支付宝';
         
         // 如果有支付链接，标记需要前端跳转
         if (apiOrder.qrUrl || apiOrder.payUrl) {

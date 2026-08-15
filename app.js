@@ -1919,7 +1919,10 @@ function showUploadConfirmDialog(gegeId, photos) {
   var isMobile = window.innerWidth <= 768;
   var columns = isMobile ? 2 : 4;
   
-  var html = '<div style="max-height:' + (isMobile ? '50vh' : '400px') + ';overflow-y:auto;margin:15px 0;">';
+  var existingCount = (state.gegePhotos[gegeId] || []).length;
+  var totalAfter = existingCount + photos.length;
+  
+  var html = '<div style="max-height:' + (isMobile ? '50vh' : '400px') + ';overflow-y:auto;margin:15px 0;-webkit-overflow-scrolling:touch;">';
   html += '<div style="display:grid;grid-template-columns:repeat(' + columns + ',1fr);gap:10px;">';
   
   for (var i = 0; i < photos.length; i++) {
@@ -1930,10 +1933,14 @@ function showUploadConfirmDialog(gegeId, photos) {
   }
   
   html += '</div></div>';
-  html += '<p style="color:#FFD700;text-align:center;margin:15px 0;font-size:' + (isMobile ? '14px' : '16px') + ';">📸 预览 ' + photos.length + ' 张圣容，确认上传？</p>';
-  html += '<div style="display:flex;gap:10px;margin-top:15px;">';
-  html += '<button class="btn-cancel" onclick="cancelUploadConfirm(this)" style="flex:1;padding:12px;font-size:' + (isMobile ? '14px' : '16px') + ';">取消</button>';
-  html += '<button class="save-btn big" onclick="confirmGegeUpload(' + gegeId + ')" style="flex:1;padding:12px;font-size:' + (isMobile ? '14px' : '16px') + ';">✅ 确认上传</button>';
+  html += '<div style="background:rgba(139,0,0,0.2);border:1px solid #8B4513;border-radius:8px;padding:10px;margin:15px 0;">';
+  html += '<p style="color:#FFD700;text-align:center;margin:0;font-size:' + (isMobile ? '13px' : '15px') + ';">📸 预览 <b>' + photos.length + '</b> 张新照片</p>';
+  html += '<p style="color:#DAA520;text-align:center;margin:5px 0 0;font-size:' + (isMobile ? '12px' : '14px') + ';">📁 ' + GEGE_NAMES[gegeId] + ' 现有：' + existingCount + ' 张</p>';
+  html += '<p style="color:#90EE90;text-align:center;margin:5px 0 0;font-size:' + (isMobile ? '12px' : '14px') + ';">💾 保存后总计：<b>' + totalAfter + '</b> 张</p>';
+  html += '</div>';
+  html += '<div style="display:flex;gap:10px;margin-top:15px;flex-direction:' + (isMobile ? 'column' : 'row') + ';">';
+  html += '<button class="btn-cancel" onclick="cancelUploadConfirm(this)" style="' + (isMobile ? 'width:100%;padding:14px;' : 'flex:1;padding:12px;') + 'font-size:' + (isMobile ? '15px' : '16px') + ';">取消</button>';
+  html += '<button class="save-btn big" onclick="confirmGegeUpload(' + gegeId + ')" style="' + (isMobile ? 'width:100%;padding:14px;' : 'flex:1;padding:12px;') + 'font-size:' + (isMobile ? '15px' : '16px') + ';">💾 点击保存</button>';
   html += '</div>';
   
   var modal = document.createElement('div');
@@ -1974,8 +1981,15 @@ function confirmGegeUpload(gegeId) {
   }
   
   var photos = window._pendingUpload.photos;
+  var totalBefore = state.gegePhotos[gegeId].length;
   state.gegePhotos[gegeId] = state.gegePhotos[gegeId].concat(photos);
-  saveGegePhotos(gegeId);
+  
+  var saveResult = saveGegePhotos(gegeId);
+  if (!saveResult) {
+    showToast('保存失败！存储空间可能已满，请减少照片数量');
+    return;
+  }
+  
   startGegeScrollAnimation(gegeId);
   renderGegeWall(gegeId);
   renderGegePhotoList(gegeId);
@@ -1988,7 +2002,8 @@ function confirmGegeUpload(gegeId) {
   for (var m = 0; m < modals.length; m++) modals[m].remove();
   window._pendingUpload = null;
   
-  showToast(GEGE_NAMES[gegeId] + '圣容上传成功！共' + state.gegePhotos[gegeId].length + '张');
+  var total = state.gegePhotos[gegeId].length;
+  showToast('✅ ' + GEGE_NAMES[gegeId] + ' 保存成功！共' + total + '张（新增' + photos.length + '张）');
 }
 
 // ============ 手机端相册Tab切换 ============
@@ -2051,29 +2066,62 @@ function initMobileWall() {
   });
 }
 
-// 保存格格照片到localStorage
+// 保存格格照片到localStorage（带错误处理）
 function saveGegePhotos(gegeId) {
-  localStorage.setItem('gege_photos_' + gegeId, JSON.stringify(state.gegePhotos[gegeId]));
+  try {
+    var data = JSON.stringify(state.gegePhotos[gegeId]);
+    var key = 'gege_photos_' + gegeId;
+    localStorage.setItem(key, data);
+    
+    // 验证保存是否成功
+    var verify = localStorage.getItem(key);
+    if (verify !== data) {
+      console.error('保存验证失败：gege' + gegeId);
+      return false;
+    }
+    
+    console.log('✅ 保存成功：' + GEGE_NAMES[gegeId] + '，' + state.gegePhotos[gegeId].length + '张照片');
+    return true;
+  } catch(e) {
+    console.error('保存格格照片失败:', e.message);
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      console.error('存储空间不足！尝试压缩或减少照片数量');
+    }
+    return false;
+  }
 }
 
-// 加载格格照片
+// 加载格格照片（带错误处理和验证）
 function loadGegePhotos(gegeId) {
-  var saved = localStorage.getItem('gege_photos_' + gegeId);
-  if (saved) {
-    try {
+  try {
+    var key = 'gege_photos_' + gegeId;
+    var saved = localStorage.getItem(key);
+    
+    if (saved) {
       state.gegePhotos[gegeId] = JSON.parse(saved);
-    } catch(e) {
+      console.log('📂 加载' + GEGE_NAMES[gegeId] + '照片：' + state.gegePhotos[gegeId].length + '张');
+    } else {
       state.gegePhotos[gegeId] = [];
+      console.log('📂 ' + GEGE_NAMES[gegeId] + '相册为空');
     }
+  } catch(e) {
+    console.error('加载格格照片失败:', e.message);
+    state.gegePhotos[gegeId] = [];
   }
   
-  var goldSaved = localStorage.getItem('gege_gold_' + gegeId);
-  if (goldSaved) {
-    state.gegeGold[gegeId] = parseInt(goldSaved) || 0;
+  // 加载金币数据
+  try {
+    var goldKey = 'gege_gold_' + gegeId;
+    var goldSaved = localStorage.getItem(goldKey);
+    if (goldSaved) {
+      state.gegeGold[gegeId] = parseInt(goldSaved) || 0;
+    }
+  } catch(e) {
+    console.error('加载金币失败:', e.message);
   }
 }
 
-// 渲染单个格格的照片墙
+// 渲染单个格格的照片墙（优化版 - 减少DOM操作）
 function renderGegeWall(gegeId) {
   var photos = state.gegePhotos[gegeId];
   var slots = ['gege' + gegeId + 'Slot1', 'gege' + gegeId + 'Slot2'];
@@ -2084,7 +2132,17 @@ function renderGegeWall(gegeId) {
     
     if (photos && photos.length > 0) {
       var photoIndex = (state.gegeIndex[gegeId] + i) % photos.length;
-      slot.innerHTML = '<img src="' + photos[photoIndex].url + '" style="width:100%;height:100%;object-fit:cover;" onclick="viewGegePhoto(' + gegeId + ',' + photoIndex + ')">';
+      var photoUrl = photos[photoIndex].url;
+      
+      // 只更新src如果变化了
+      var existingImg = slot.querySelector('img');
+      if (existingImg) {
+        if (existingImg.src !== photoUrl) {
+          existingImg.src = photoUrl;
+        }
+      } else {
+        slot.innerHTML = '<img src="' + photoUrl + '" style="width:100%;height:100%;object-fit:cover;" onclick="viewGegePhoto(' + gegeId + ',' + photoIndex + ')">';
+      }
     } else {
       slot.innerHTML = '<div class="photo-placeholder"><span class="photo-icon">📸</span><span>圣容</span></div>';
     }
@@ -2094,19 +2152,23 @@ function renderGegeWall(gegeId) {
   if (goldEl) goldEl.textContent = state.gegeGold[gegeId] || 0;
 }
 
-// 启动滚动动画
+// 启动滚动动画（优化版 - 手机端更流畅）
 function startGegeScrollAnimation(gegeId) {
   stopGegeScrollAnimation(gegeId);
   
   if (!state.gegePhotos[gegeId] || state.gegePhotos[gegeId].length < 2) return;
   
   state.gegeAnimation[gegeId] = true;
+  
+  // 手机端使用更长间隔减少CPU占用
+  var interval = (window.innerWidth <= 768) ? 4000 : 2500;
+  
   state.gegeScrollTimer[gegeId] = setInterval(function() {
     if (!state.gegeAnimation[gegeId]) return;
     var total = state.gegePhotos[gegeId].length;
     state.gegeIndex[gegeId] = (state.gegeIndex[gegeId] + 1) % total;
     renderGegeWall(gegeId);
-  }, 2500);
+  }, interval);
 }
 
 // 停止滚动动画
@@ -3798,3 +3860,27 @@ function openPaymentDoc() {
 init();
 loadGalleryAndTraining();
 initPaymentConfigUI();
+
+// 页面离开前保存所有照片数据
+window.addEventListener('pagehide', function() {
+  for (var i = 1; i <= 3; i++) {
+    if (state.gegePhotos[i] && state.gegePhotos[i].length > 0) {
+      saveGegePhotos(i);
+    }
+  }
+});
+
+// 页面显示时重新加载（从后台返回时）
+window.addEventListener('pageshow', function(e) {
+  if (e.persisted) {
+    // 从缓存恢复，重新加载照片
+    for (var i = 1; i <= 3; i++) {
+      loadGegePhotos(i);
+      renderGegeWall(i);
+      if (state.gegePhotos[i].length >= 2) {
+        startGegeScrollAnimation(i);
+      }
+    }
+    console.log('🔄 从后台恢复，已重新加载照片');
+  }
+});

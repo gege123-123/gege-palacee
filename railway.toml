@@ -1,8 +1,2 @@
 [env]
 NODE_ENV = "production"
-
-[deploy]
-healthcheckPath = "/health"
-
-[build]
-startCommand = "node server.js"

@@ -1913,39 +1913,211 @@ function bindGegeUploadInputs() {
           showToast(GEGE_NAMES[gegeId] + '：最多50张，已截取前' + remaining + '张');
         }
         
+        // 先预览再确认
         var processed = 0;
-        var uploadedPhotos = [];
+        var previews = [];
         
-        function processFile(file) {
+        function processForPreview(file) {
           var reader = new FileReader();
           reader.onload = function(event) {
-            uploadedPhotos.push({
+            previews.push({
               url: event.target.result,
               name: file.name
             });
             processed++;
             if (processed < toUpload.length) {
-              processFile(toUpload[processed]);
+              processForPreview(toUpload[processed]);
             } else {
-              state.gegePhotos[gegeId] = state.gegePhotos[gegeId].concat(uploadedPhotos);
-              saveGegePhotos(gegeId);
-              startGegeScrollAnimation(gegeId);
-              renderGegeWall(gegeId);
-              renderGegePhotoList(gegeId);
-              
-              var countEl = document.getElementById('gegeUploadCount');
-              if (countEl) countEl.textContent = state.gegePhotos[gegeId].length;
-              
-              showToast(GEGE_NAMES[gegeId] + '圣容上传成功！共' + state.gegePhotos[gegeId].length + '张');
+              // 所有文件读取完成，显示确认界面
+              showUploadConfirmDialog(gegeId, previews);
             }
           };
           reader.readAsDataURL(file);
         }
         
-        processFile(toUpload[0]);
+        processForPreview(toUpload[0]);
       });
     })(g);
   }
+}
+
+// 显示上传确认对话框
+function showUploadConfirmDialog(gegeId, photos) {
+  var isMobile = window.innerWidth <= 768;
+  var columns = isMobile ? 2 : 4;
+  
+  var html = '<div style="max-height:' + (isMobile ? '50vh' : '400px') + ';overflow-y:auto;margin:15px 0;">';
+  html += '<div style="display:grid;grid-template-columns:repeat(' + columns + ',1fr);gap:10px;">';
+  
+  for (var i = 0; i < photos.length; i++) {
+    html += '<div style="position:relative;aspect-ratio:3/4;border:2px solid #FFD700;border-radius:8px;overflow:hidden;">';
+    html += '<img src="' + photos[i].url + '" style="width:100%;height:100%;object-fit:cover;">';
+    html += '<span style="position:absolute;bottom:5px;right:5px;background:rgba(139,0,0,0.8);color:#FFD700;font-size:10px;padding:2px 6px;border-radius:10px;">' + (i + 1) + '</span>';
+    html += '</div>';
+  }
+  
+  html += '</div></div>';
+  html += '<p style="color:#FFD700;text-align:center;margin:15px 0;font-size:' + (isMobile ? '14px' : '16px') + ';">📸 预览 ' + photos.length + ' 张圣容，确认上传？</p>';
+  html += '<div style="display:flex;gap:10px;margin-top:15px;">';
+  html += '<button class="btn-cancel" onclick="cancelUploadConfirm(this)" style="flex:1;padding:12px;font-size:' + (isMobile ? '14px' : '16px') + ';">取消</button>';
+  html += '<button class="save-btn big" onclick="confirmGegeUpload(' + gegeId + ')" style="flex:1;padding:12px;font-size:' + (isMobile ? '14px' : '16px') + ';">✅ 确认上传</button>';
+  html += '</div>';
+  
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.style.zIndex = '10000';
+  modal.innerHTML = '<div class="modal-content" style="max-width:' + (isMobile ? '95vw' : '500px') + ';padding:' + (isMobile ? '15px' : '25px') + ';">' +
+    '<span style="position:sticky;top:0;float:right;color:#fff;cursor:pointer;font-size:24px;z-index:10;" onclick="this.closest(\'.modal-overlay\').remove()">×</span>' +
+    '<h3 style="color:#FFD700;margin:10px 0;text-align:center;font-size:' + (isMobile ? '16px' : '20px') + ';">👑 ' + GEGE_NAMES[gegeId] + ' 圣容上传</h3>' +
+    html +
+  '</div>';
+  
+  // 存储待确认的照片数据
+  window._pendingUpload = { gegeId: gegeId, photos: photos };
+  
+  modal.onclick = function(e) { 
+    if (e.target === modal) {
+      modal.remove();
+      window._pendingUpload = null;
+    }
+  };
+  
+  document.body.appendChild(modal);
+}
+
+// 取消上传确认
+function cancelUploadConfirm(btn) {
+  var modal = btn.closest('.modal-overlay');
+  if (modal) modal.remove();
+  window._pendingUpload = null;
+  showToast('已取消上传');
+}
+
+// 确认上传格格照片
+function confirmGegeUpload(gegeId) {
+  if (!window._pendingUpload || window._pendingUpload.gegeId !== gegeId) {
+    showToast('上传数据已失效，请重新选择');
+    return;
+  }
+  
+  var photos = window._pendingUpload.photos;
+  state.gegePhotos[gegeId] = state.gegePhotos[gegeId].concat(photos);
+  saveGegePhotos(gegeId);
+  startGegeScrollAnimation(gegeId);
+  renderGegeWall(gegeId);
+  renderGegePhotoList(gegeId);
+  
+  var countEl = document.getElementById('gegeUploadCount');
+  if (countEl) countEl.textContent = state.gegePhotos[gegeId].length;
+  
+  // 关闭确认对话框
+  var modals = document.querySelectorAll('.modal-overlay');
+  for (var m = 0; m < modals.length; m++) modals[m].remove();
+  window._pendingUpload = null;
+  
+  showToast(GEGE_NAMES[gegeId] + '圣容上传成功！共' + state.gegePhotos[gegeId].length + '张');
+}
+
+// ============ 手机端相册Tab切换 ============
+var MOBILE_WALL_KEY = 'gege_mobile_wall';
+
+function switchMobileWall(gegeId) {
+  // 更新所有wall的active状态
+  for (var i = 1; i <= 3; i++) {
+    var wall = document.getElementById('gegeWall' + i);
+    if (wall) {
+      if (i === gegeId) {
+        wall.classList.add('active-wall');
+      } else {
+        wall.classList.remove('active-wall');
+      }
+    }
+  }
+  // 更新tab按钮active状态
+  var tabs = document.querySelectorAll('.gege-mobile-tab');
+  if (tabs) {
+    for (var t = 0; t < tabs.length; t++) {
+      var tabId = parseInt(tabs[t].getAttribute('data-gege-id') || '0');
+      // 检查tab文本对应的格格
+      if (tabId === gegeId) {
+        tabs[t].classList.add('active');
+      } else {
+        tabs[t].classList.remove('active');
+      }
+    }
+  }
+  // 更可靠的方式：按index更新
+  var mobileTabs = document.getElementById('gegeMobileTabs');
+  if (mobileTabs) {
+    var btns = mobileTabs.querySelectorAll('.gege-mobile-tab');
+    for (var b = 0; b < btns.length; b++) {
+      btns[b].classList.remove('active');
+    }
+    if (btns[gegeId - 1]) {
+      btns[gegeId - 1].classList.add('active');
+    }
+  }
+  
+  // 同步控制殿中的tab
+  if (typeof switchGegeTab === 'function') {
+    var adminTabs = document.querySelectorAll('.gege-upload-tabs .gege-tab');
+    for (var a = 0; a < adminTabs.length; a++) adminTabs[a].classList.remove('active');
+    if (adminTabs[gegeId - 1]) adminTabs[gegeId - 1].classList.add('active');
+    currentGegeTab = gegeId;
+    if (typeof renderGegePhotoList === 'function') {
+      renderGegePhotoList(gegeId);
+    }
+  }
+  
+  try { localStorage.setItem(MOBILE_WALL_KEY, gegeId); } catch(e) {}
+}
+
+function initMobileWall() {
+  var savedId = 1;
+  try {
+    var v = localStorage.getItem(MOBILE_WALL_KEY);
+    if (v) savedId = parseInt(v) || 1;
+  } catch(e) {}
+  
+  // 初始化只有当前wall可见（手机端）
+  for (var i = 1; i <= 3; i++) {
+    var wall = document.getElementById('gegeWall' + i);
+    if (wall) {
+      if (i === savedId) wall.classList.add('active-wall');
+      else wall.classList.remove('active-wall');
+    }
+  }
+  
+  // 更新tab按钮active
+  var mobileTabs = document.getElementById('gegeMobileTabs');
+  if (mobileTabs) {
+    var btns = mobileTabs.querySelectorAll('.gege-mobile-tab');
+    for (var b = 0; b < btns.length; b++) {
+      btns[b].classList.remove('active');
+      if (b === savedId - 1) btns[b].classList.add('active');
+    }
+  }
+  
+  currentGegeTab = savedId;
+  // 监听resize，如果从桌面变成手机，重新初始化可见wall
+  window.addEventListener('resize', function() {
+    var isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+      // 只保留当前wall可见
+      for (var i = 1; i <= 3; i++) {
+        var wall = document.getElementById('gegeWall' + i);
+        if (!wall) continue;
+        if (i === currentGegeTab) wall.classList.add('active-wall');
+        else wall.classList.remove('active-wall');
+      }
+    } else {
+      // 桌面端：取消active-wall限制，让所有wall都显示
+      for (var j = 1; j <= 3; j++) {
+        var w = document.getElementById('gegeWall' + j);
+        if (w) w.classList.remove('active-wall');
+      }
+    }
+  });
 }
 
 // 保存格格照片到localStorage
@@ -3332,6 +3504,7 @@ function loadGalleryAndTraining() {
     }
   }
   bindGegeUploadInputs();
+  initMobileWall();
   
   loadTrainingTiers();
   renderTributeGrid();

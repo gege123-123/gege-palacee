@@ -2820,7 +2820,7 @@ html, body {
   }
   
   .throne-back {
-    height: 720px;
+    height: auto;
     min-height: 720px;
     border-radius: 0;
     border-width: 0;
@@ -2832,6 +2832,11 @@ html, body {
     width: 100%;
     max-width: 100vw;
     margin: 0;
+    overflow: visible;
+  }
+  
+  .throne-container {
+    overflow: visible;
   }
   
   /* 手机端：三个相册纵向堆叠，全部可见 */
@@ -2846,7 +2851,6 @@ html, body {
     justify-content: flex-start;
     padding: 10px 5px;
     height: auto;
-    min-height: 720px;
     display: flex;
   }
   

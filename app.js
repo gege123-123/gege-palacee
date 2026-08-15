@@ -2377,6 +2377,9 @@ var goldSearchResults = [];
 var selectedGoldUser = null;
 
 function updateGoldManageInfo() {
+  // 清空搜索框并加载全部奴才
+  var searchInput = document.getElementById('goldSearchInput');
+  if (searchInput) searchInput.value = '';
   searchGoldUsers();
 }
 
@@ -2392,7 +2395,7 @@ async function searchGoldUsers() {
   var resultsEl = document.getElementById('goldSearchResults');
   
   if (!resultsEl) return;
-  resultsEl.innerHTML = '<div style="color:#888;text-align:center;padding:10px;">搜索中...</div>';
+  resultsEl.innerHTML = '<div style="color:#DAA520;text-align:center;padding:20px;font-size:14px;">🔍 加载奴才名单...</div>';
   
   try {
     var url = '/api/admin/users/search?q=' + encodeURIComponent(q) + '&adminKey=gege123';
@@ -2402,10 +2405,10 @@ async function searchGoldUsers() {
       goldSearchResults = result.users;
       renderGoldSearchResults();
     } else {
-      resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:10px;">' + (result.message || '搜索失败') + '</div>';
+      resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:20px;">' + (result.message || '加载失败') + '</div>';
     }
   } catch(e) {
-    resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:10px;">搜索出错</div>';
+    resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:20px;">加载出错，请刷新重试</div>';
   }
 }
 
@@ -2414,24 +2417,25 @@ function renderGoldSearchResults() {
   if (!resultsEl) return;
   
   if (goldSearchResults.length === 0) {
-    resultsEl.innerHTML = '<div style="color:#888;text-align:center;padding:10px;">未找到奴才账户</div>';
+    resultsEl.innerHTML = '<div style="color:#DAA520;text-align:center;padding:20px;">暂无奴才注册</div>';
     return;
   }
   
   var html = '';
   for (var i = 0; i < goldSearchResults.length; i++) {
     var u = goldSearchResults[i];
-    html += '<div style="padding:8px;margin-bottom:6px;background:rgba(0,0,0,0.3);border:1px solid #8B4513;border-radius:6px;cursor:pointer;transition:all 0.3s;" onclick="selectGoldUser(\'' + u.username + '\')">' +
+    html += '<div style="padding:12px;margin-bottom:8px;background:linear-gradient(135deg,rgba(139,0,0,0.3),rgba(0,0,0,0.4));border:2px solid #8B4513;border-radius:10px;cursor:pointer;transition:all 0.3s;" onclick="selectGoldUser(\'' + u.username + '\')">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-        '<div>' +
-          '<span style="color:#FFD700;font-weight:bold;font-size:14px;">' + u.username + '</span>' +
-          '<span style="color:#DAA520;font-size:12px;margin-left:6px;">（' + (u.servantName || '奴才') + '）</span>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span style="color:#FFD700;font-weight:bold;font-size:16px;">' + u.username + '</span>' +
+          '<span style="color:#DAA520;font-size:13px;">（' + (u.servantName || '奴才') + '）</span>' +
         '</div>' +
-        '<div style="color:#FF4500;font-weight:bold;">🪙 ' + (u.gold || 0) + '</div>' +
+        '<div style="color:#FF4500;font-weight:bold;font-size:16px;">🪙 ' + (u.gold || 0) + '</div>' +
       '</div>' +
-      '<div style="display:flex;gap:8px;font-size:11px;color:#888;margin-top:3px;">' +
-        '<span>奉献:' + (u.totalTributed || 0) + '</span>' +
-        '<span>叩拜:' + (u.kneelCount || 0) + '</span>' +
+      '<div style="display:flex;gap:12px;font-size:12px;color:#B8860B;margin-top:4px;">' +
+        '<span>💎 奉献:' + (u.totalTributed || 0) + '</span>' +
+        '<span>🙇 叩拜:' + (u.kneelCount || 0) + '</span>' +
+        '<span>📅 ' + ((u.createdAt || '').substring(0, 10)) + '</span>' +
       '</div>' +
     '</div>';
   }

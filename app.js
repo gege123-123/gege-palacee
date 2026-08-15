@@ -26,16 +26,17 @@ var state = {
   currentOrder: null,
   serverConfig: null,
   paymentPollingTimer: null,
-  // 三个格格独立相册
+  // 四个格格独立相册
   gegePhotos: {
     1: [],
     2: [],
-    3: []
+    3: [],
+    4: []
   },
-  gegeIndex: { 1: 0, 2: 0, 3: 0 },
-  gegeAnimation: { 1: true, 2: true, 3: true },
-  gegeScrollTimer: { 1: null, 2: null, 3: null },
-  gegeGold: { 1: 0, 2: 0, 3: 0 },
+  gegeIndex: { 1: 0, 2: 0, 3: 0, 4: 0 },
+  gegeAnimation: { 1: true, 2: true, 3: true, 4: true },
+  gegeScrollTimer: { 1: null, 2: null, 3: null, 4: null },
+  gegeGold: { 1: 0, 2: 0, 3: 0, 4: 0 },
   currentGegeTab: 1
 };
 
@@ -275,7 +276,7 @@ async function userLogout() {
   localStorage.removeItem('gege_local_kneel');
   localStorage.removeItem('gege_local_total_tributed');
   
-  for (var g = 1; g <= 3; g++) stopGegeScrollAnimation(g);
+  for (var g = 1; g <= 4; g++) stopGegeScrollAnimation(g);
   updateUserInfoBar();
   updateGoldDisplay();
   updateRankDisplay();
@@ -1798,7 +1799,8 @@ function uploadMediaFromPage() {
 var GEGE_NAMES = {
   1: '瓜尔佳格格',
   2: '爱新觉罗璇格格',
-  3: '爱新觉罗凌霜格格'
+  3: '爱新觉罗凌霜格格',
+  4: '镶黄旗古萌格格'
 };
 
 // 切换格格Tab（控制殿内）
@@ -1870,7 +1872,7 @@ function uploadGegePhotos(gegeId) {
 
 // 绑定格格照片上传事件（在初始化时调用）
 function bindGegeUploadInputs() {
-  for (var g = 1; g <= 3; g++) {
+  for (var g = 1; g <= 4; g++) {
     (function(gegeId) {
       var input = document.getElementById('gege' + gegeId + 'Input');
       if (!input) return;
@@ -2038,8 +2040,8 @@ function initMobileWall() {
     if (v) savedId = parseInt(v) || 1;
   } catch(e) {}
   
-  // 手机端三墙全显示，桌面端也全显示
-  for (var i = 1; i <= 3; i++) {
+  // 手机端四墙全显示，桌面端也全显示
+  for (var i = 1; i <= 4; i++) {
     var wall = document.getElementById('gegeWall' + i);
     if (wall) {
       wall.classList.add('active-wall');
@@ -2059,7 +2061,7 @@ function initMobileWall() {
   currentGegeTab = savedId;
   // 监听resize，确保所有wall始终可见
   window.addEventListener('resize', function() {
-    for (var i = 1; i <= 3; i++) {
+    for (var i = 1; i <= 4; i++) {
       var wall = document.getElementById('gegeWall' + i);
       if (wall) wall.classList.add('active-wall');
     }
@@ -3360,7 +3362,7 @@ function scrollToPhotoWall() {
   if (photoSection && photoSection.scrollIntoView) {
     photoSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
-  for (var g = 1; g <= 3; g++) {
+  for (var g = 1; g <= 4; g++) {
     if (state.gegePhotos[g] && state.gegePhotos[g].length >= 2) {
       startGegeScrollAnimation(g);
     }
@@ -3646,7 +3648,7 @@ function switchArchiveTab(tabElement, tabName) {
 function loadGalleryAndTraining() {
   loadGallerySlots();
   
-  for (var i = 1; i <= 3; i++) {
+  for (var i = 1; i <= 4; i++) {
     loadGegePhotos(i);
     renderGegeWall(i);
     if (state.gegePhotos[i].length >= 2) {
@@ -3863,7 +3865,7 @@ initPaymentConfigUI();
 
 // 页面离开前保存所有照片数据
 window.addEventListener('pagehide', function() {
-  for (var i = 1; i <= 3; i++) {
+  for (var i = 1; i <= 4; i++) {
     if (state.gegePhotos[i] && state.gegePhotos[i].length > 0) {
       saveGegePhotos(i);
     }
@@ -3874,7 +3876,7 @@ window.addEventListener('pagehide', function() {
 window.addEventListener('pageshow', function(e) {
   if (e.persisted) {
     // 从缓存恢复，重新加载照片
-    for (var i = 1; i <= 3; i++) {
+    for (var i = 1; i <= 4; i++) {
       loadGegePhotos(i);
       renderGegeWall(i);
       if (state.gegePhotos[i].length >= 2) {

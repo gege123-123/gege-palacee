@@ -622,6 +622,7 @@
             <button class="gege-mobile-tab active" onclick="switchMobileWall(1)">瓜尔佳</button>
             <button class="gege-mobile-tab" onclick="switchMobileWall(2)">璇格格</button>
             <button class="gege-mobile-tab" onclick="switchMobileWall(3)">凌霜</button>
+            <button class="gege-mobile-tab" onclick="switchMobileWall(4)">古萌</button>
           </div>
           <!-- 格格2：爱新觉罗璇格格（左） -->
           <div class="gege-single-wall" id="gegeWall2">
@@ -690,6 +691,29 @@
               <span>💎</span> 给凌霜格格上贡
             </button>
             <input type="file" id="gege3Input" accept="image/*" multiple max="50" style="display:none">
+          </div>
+          
+          <!-- 格格4：镶黄旗古萌格格 -->
+          <div class="gege-single-wall" id="gegeWall4">
+            <div class="photo-wall-header">
+              <span class="photo-wall-title">👑 镶黄旗古萌格格</span>
+              <button class="photo-wall-upload" onclick="uploadGegePhotos(4)" title="上传照片">📤</button>
+            </div>
+            <div class="photo-wall-grid">
+              <div class="photo-wall-slot photo-scroll-animation" data-slot="1" id="gege4Slot1">
+                <div class="photo-placeholder"><span class="photo-icon">📸</span><span>圣容</span></div>
+              </div>
+              <div class="photo-wall-slot photo-scroll-animation" data-slot="2" id="gege4Slot2">
+                <div class="photo-placeholder"><span class="photo-icon">📸</span><span>圣容</span></div>
+              </div>
+            </div>
+            <div class="gege-gold-rank">
+              <span>🪙 古萌格格累计金币：<b id="gege4Gold">0</b></span>
+            </div>
+            <button class="tribute-target-btn" id="tributeBtn4" onclick="selectTributeGege(4, this)">
+              <span>💎</span> 给古萌格格上贡
+            </button>
+            <input type="file" id="gege4Input" accept="image/*" multiple max="50" style="display:none">
           </div>
         </div>
       </div>
@@ -1002,6 +1026,7 @@
         <button class="gege-tab active" onclick="switchGegeTab(1, this)">瓜尔佳格格</button>
         <button class="gege-tab" onclick="switchGegeTab(2, this)">爱新觉罗璇格格</button>
         <button class="gege-tab" onclick="switchGegeTab(3, this)">爱新觉罗凌霜格格</button>
+        <button class="gege-tab" onclick="switchGegeTab(4, this)">镶黄旗古萌格格</button>
       </div>
       <div class="upload-area" id="gegeUploadArea" onclick="uploadGegePhotos(currentGegeTab)">
         <div class="upload-preview" id="gegeUploadPreview">
@@ -1165,6 +1190,6 @@
 
 <script src="archive_data.js?v=20260810k"></script>
 <script src="training_data.js?v=20260810k"></script>
-<script src="app.js?v=20260815d"></script>
+<script src="app.js?v=20260815e"></script>
 </body>
 </html>

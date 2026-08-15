@@ -2527,16 +2527,16 @@ html, body {
   margin: 8px 0;
 }
 
-/* ============ 三个格格相册系统 ============ */
+/* ============ 四个格格相册系统 ============ */
 .gege-photo-walls {
   position: absolute;
   top: 100px;
-  left: 15px;
-  right: 15px;
+  left: 10px;
+  right: 10px;
   bottom: 15px;
   display: flex;
   flex-direction: row;
-  gap: 12px;
+  gap: 8px;
   z-index: 10;
   justify-content: center;
 }
@@ -2929,8 +2929,8 @@ html, body {
   }
   
   .gege-tab {
-    font-size: 9px;
-    padding: 5px 2px;
+    font-size: 8px;
+    padding: 4px 2px;
   }
   
   /* 手机端：弹窗内容更大 */

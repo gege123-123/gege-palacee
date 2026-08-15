@@ -1407,6 +1407,11 @@ app.get('/api/stats', (req, res) => {
 });
 
 // 健康检查（增强版）
+// Railway 健康检查端点
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 app.get('/api/health', (req, res) => {
   const activeOrders = Array.from(orders.values()).filter(o => o.status === 'pending').length;
   const paidToday = Array.from(orders.values())

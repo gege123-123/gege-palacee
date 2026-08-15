@@ -1325,7 +1325,7 @@
     "orderNo": "GEGE178677527326379C317F2",
     "amount": 5,
     "description": "充值55金币",
-    "status": "pending",
+    "status": "expired",
     "createdAt": "2026-08-15T06:27:53.263Z",
     "paidAt": null,
     "expiredAt": "2026-08-15T06:57:53.263Z",

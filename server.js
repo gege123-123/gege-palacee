@@ -850,41 +850,12 @@ function addUserGold(username, amount, reason) {
   return true;
 }
 
-// 确认订单已支付（手动确认或API验证后确认）
+// 确认订单已支付（已禁用 - 需格格手动赏赐金币）
 app.post('/api/order/:orderNo/confirm', (req, res) => {
-  const orderNo = req.params.orderNo;
-  const order = orders.get(orderNo);
-  
-  if (!order) {
-    return res.status(404).json({ success: false, message: '订单不存在' });
-  }
-  
-  // 如果已经支付成功，直接返回
-  if (order.status === 'paid' && order.paid) {
-    return res.json({ 
-      success: true, 
-      status: 'paid', 
-      message: '订单已支付',
-      goldAdded: order.goldAmount
-    });
-  }
-  
-  // 允许从pending状态确认
-  if (order.status === 'pending') {
-    // 使用统一入口处理
-    markOrderAsPaid(orderNo, { confirmedAt: new Date().toISOString() }, '手动确认');
-    
-    const updatedOrder = orders.get(orderNo);
-    return res.json({ 
-      success: true, 
-      status: 'paid', 
-      message: '支付确认成功',
-      goldAdded: updatedOrder ? updatedOrder.goldAmount : 0,
-      username: updatedOrder ? updatedOrder.username : null
-    });
-  }
-  
-  return res.status(400).json({ success: false, message: '订单状态异常: ' + order.status });
+  return res.status(403).json({ 
+    success: false, 
+    message: '手动确认已禁用，请联系格格在控制殿手动赏赐金币' 
+  });
 });
 
 // 取消订单
@@ -1018,44 +989,12 @@ app.post('/api/payment/notify', async (req, res) => {
   }
 });
 
-// ============ 测试模式接口 ============
-
-/**
- * 模拟支付成功回调（用于本地测试）
- * 在测试模式下，可以通过此接口手动触发支付成功
- */
+// ============ 测试模式接口（已禁用） ============
 app.post('/api/test/pay/:orderNo', (req, res) => {
-  try {
-    const orderNo = req.params.orderNo;
-    const order = orders.get(orderNo);
-    
-    if (!order) {
-      return res.status(404).json({ success: false, message: '订单不存在' });
-    }
-    
-    if (order.status === 'paid') {
-      return res.json({ success: true, message: '订单已支付', orderNo });
-    }
-    
-    // 模拟支付成功
-    markOrderAsPaid(orderNo, { 
-      testMode: true, 
-      paidAt: new Date().toISOString(),
-      amount: order.amount * 100,
-      status: 'paid'
-    }, '测试模式');
-    
-    res.json({ 
-      success: true, 
-      message: '测试支付成功', 
-      orderNo,
-      goldAmount: order.goldAmount,
-      username: order.username
-    });
-  } catch (error) {
-    console.error('测试支付失败:', error);
-    res.status(500).json({ success: false, message: '测试支付失败' });
-  }
+  return res.status(403).json({ 
+    success: false, 
+    message: '测试支付已禁用' 
+  });
 });
 
 /**

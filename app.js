@@ -802,7 +802,8 @@ function showManualRechargeQR(price, gold, qrCode) {
   
   if (rechargePayInfo) {
     rechargePayInfo.innerHTML = '<p class="pay-info-status">⏳ 请扫码付款 ¥' + price + '</p>' +
-      '<p class="pay-info-tip">支付后点击"已付款"按钮确认到账</p>' +
+      '<p class="pay-info-tip">付款后请联系格格在控制殿手动赏赐金币</p>' +
+      '<p class="pay-info-tip">（自动到账暂不可用，请勿自行确认）</p>' +
       '<p class="pay-info-timer">请在24小时内完成付款</p>';
   }
 }
@@ -958,36 +959,8 @@ function showRechargeSuccessUI(gold) {
 }
 
 async function confirmRechargePaid() {
-  if (state.currentRechargeOrder && state.currentRechargeOrder.orderNo) {
-    // 调用服务器确认支付接口（会自动加金币）
-    var result = await apiRequest('/api/order/' + state.currentRechargeOrder.orderNo + '/confirm', {
-      method: 'POST'
-    });
-    
-    if (result && result.success) {
-      confirmRechargeSuccess();
-    } else {
-      showToast('确认失败：' + (result ? result.message : '未知错误'));
-    }
-  } else {
-    var amount = state.selectedRecharge;
-    var gold = getRechargeGold(amount);
-    
-    // 手动模式：直接本地加金币
-    state.gold += gold;
-    saveGold();
-    updateGoldDisplay();
-    updateUserInfoBar();
-    
-    // 如果已登录，同步到服务器
-    if (state.userToken) {
-      syncGoldToServer(gold, '充值获得');
-    }
-    
-    addGegeGold(selectedTributeGege || 1, gold);
-    showToast('🎉 奉献成功！获得 ' + gold + ' 金币');
-    closeRechargePay();
-  }
+  showToast('❌ 手动确认已禁用，请联系格格赏赐金币');
+  return;
 }
 
 function closeRechargePay() {

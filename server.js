@@ -58,8 +58,37 @@ app.use('/api/', (req, res, next) => {
 });
 
 // ============ 用户系统 ============
-const USERS_FILE = path.join(__dirname, 'users.json');
-const SESSIONS_FILE = path.join(__dirname, 'sessions.json');
+// Railway持久化存储路径（如果可用）
+const PERSISTENT_DIR = process.env.RAILWAY_PERSISTENT_DIR || process.env.PERSISTENT_DIR || path.join(__dirname, 'data');
+// 确保持久化目录存在
+try { fs.mkdirSync(PERSISTENT_DIR, { recursive: true }); } catch(e) {}
+
+const USERS_FILE = path.join(PERSISTENT_DIR, 'users.json');
+const SESSIONS_FILE = path.join(PERSISTENT_DIR, 'sessions.json');
+const CONFIG_FILE = path.join(PERSISTENT_DIR, 'payment_config.json');
+const ORDER_FILE = path.join(PERSISTENT_DIR, 'orders.json');
+
+// 自动迁移旧位置数据到持久化目录
+function migrateOldData() {
+  const migrations = [
+    { old: path.join(__dirname, 'users.json'), new: USERS_FILE, name: '用户数据' },
+    { old: path.join(__dirname, 'sessions.json'), new: SESSIONS_FILE, name: '会话数据' },
+    { old: path.join(__dirname, 'payment_config.json'), new: CONFIG_FILE, name: '配置数据' },
+    { old: path.join(__dirname, 'orders.json'), new: ORDER_FILE, name: '订单数据' }
+  ];
+  
+  for (const m of migrations) {
+    try {
+      if (fs.existsSync(m.old) && !fs.existsSync(m.new)) {
+        fs.copyFileSync(m.old, m.new);
+        console.log(`[迁移] ${m.name} 从旧位置迁移到持久化目录`);
+      }
+    } catch(e) {
+      console.warn(`[迁移] ${m.name} 迁移失败:`, e.message);
+    }
+  }
+}
+migrateOldData();
 
 function loadUsers() {
   try {
@@ -106,7 +135,6 @@ function verifySession(token) {
 }
 
 // ============ 配置管理 ============
-const CONFIG_FILE = path.join(__dirname, 'payment_config.json');
 
 function loadConfig() {
   try {
@@ -196,7 +224,6 @@ function httpRequest(url, options = {}) {
 
 // ============ 订单管理 ============
 const orders = new Map();
-const ORDER_FILE = path.join(__dirname, 'orders.json');
 
 function loadOrders() {
   try {

@@ -468,10 +468,16 @@ function updateUserInfoBar() {
   var bar = document.getElementById('userInfoBar');
   if (state.currentUser) {
     bar.style.display = 'flex';
-    document.getElementById('userInfoName').textContent = 
-      (state.currentUser.servantName || '奴才') + '(' + state.currentUser.username + ')';
-    document.getElementById('userInfoGold').textContent = state.gold;
-    document.getElementById('userInfoKneel').textContent = state.kneelCount;
+    // 更新用户信息区
+    var userInfoEl = document.getElementById('rankUserInfo');
+    if (userInfoEl) {
+      userInfoEl.innerHTML = 
+        '<div class="info-row"><span>' + (state.currentUser.servantName || '奴才') + '</span></div>' +
+        '<div class="info-row"><span>🪙</span><span>' + state.gold + '</span></div>' +
+        '<div class="info-row"><span>🙇</span><span>' + state.kneelCount + '</span></div>' +
+        '<button class="rank-logout" onclick="userLogout()">退出</button>';
+    }
+    updateRankDisplay();
   } else {
     bar.style.display = 'none';
   }
@@ -766,38 +772,33 @@ async function updateRankDisplay() {
   if (!rankList) return;
   
   var displayName = state.userName || '奴才';
+  var myKneelCount = state.kneelCount || 0;
   
   var myRank = '';
-  if (state.totalTributed > 0) {
+  if (myKneelCount > 0) {
     myRank = '<div class="rank-item my-rank">' +
       '<span class="rank-num">我</span>' +
-      '<span class="rank-name">' + (state.currentUser ? state.currentUser.servantName : displayName) + '(' + state.totalTributed + '金)</span>' +
-      '<span class="rank-value">🪙 ' + state.totalTributed + '</span>' +
+      '<span class="rank-name">' + (state.currentUser ? state.currentUser.servantName : displayName) + '</span>' +
+      '<span class="rank-value">🙇' + myKneelCount + '</span>' +
       '</div>';
   }
   
-  // 更新名字显示
-  var myRankName = document.getElementById('myRankName');
-  if (myRankName) {
-    myRankName.textContent = state.currentUser ? state.currentUser.servantName : displayName;
-  }
-  
-  // 默认排行榜 - 卑微奴才名字
+  // 默认排行榜
   var defaultRankList = [
-    { servantName: '小狗子', totalTributed: 88888 },
-    { servantName: '贱婢', totalTributed: 66666 },
-    { servantName: '狗奴才', totalTributed: 52000 },
-    { servantName: '下贱胚', totalTributed: 38000 },
-    { servantName: '可怜虫', totalTributed: 28000 },
-    { servantName: '哈巴狗', totalTributed: 18888 },
-    { servantName: '小的', totalTributed: 12000 },
-    { servantName: '奴才甲', totalTributed: 8888 },
-    { servantName: '奴婢', totalTributed: 5200 },
-    { servantName: '小厮', totalTributed: 2800 }
+    { servantName: '小狗子', kneelCount: 9999 },
+    { servantName: '贱婢', kneelCount: 8888 },
+    { servantName: '狗奴才', kneelCount: 6666 },
+    { servantName: '下贱胚', kneelCount: 5200 },
+    { servantName: '可怜虫', kneelCount: 3800 },
+    { servantName: '哈巴狗', kneelCount: 2800 },
+    { servantName: '小的', kneelCount: 1800 },
+    { servantName: '奴才甲', kneelCount: 1200 },
+    { servantName: '奴婢', kneelCount: 888 },
+    { servantName: '小厮', kneelCount: 520 }
   ];
   
-  // 尝试从服务器获取真实排行榜
-  var serverRank = await apiRequest('/api/user/rank');
+  // 从服务器获取叩拜排行榜
+  var serverRank = await apiRequest('/api/user/kneel-rank');
   var rankData = defaultRankList;
   
   if (serverRank && serverRank.success && serverRank.rankList && serverRank.rankList.length > 0) {
@@ -811,17 +812,11 @@ async function updateRankDisplay() {
     rankHtml += '<div class="' + rankClass + '">' +
       '<span class="rank-num">' + (rankNum === 1 ? '🥇' : rankNum === 2 ? '🥈' : rankNum === 3 ? '🥉' : rankNum) + '</span>' +
       '<span class="rank-name">' + rankData[i].servantName + '</span>' +
-      '<span class="rank-value">🪙 ' + rankData[i].totalTributed + '</span>' +
+      '<span class="rank-value">🙇' + (rankData[i].kneelCount || 0) + '</span>' +
       '</div>';
   }
   
   rankList.innerHTML = myRank + rankHtml;
-  
-  // 更新我的奉献显示
-  var myContribGold = document.getElementById('myContribGold');
-  if (myContribGold) {
-    myContribGold.textContent = '🪙 ' + state.totalTributed;
-  }
 }
 
 // ============ 充值功能 ============

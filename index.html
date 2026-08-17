@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>格格的宫殿 · 爱新觉罗</title>
-<link rel="stylesheet" href="style.css?v=20260814m">
+<link rel="stylesheet" href="style.css?v=20260817r">
 </head>
 <body>
 
@@ -76,16 +76,11 @@
   <span>⚙</span>
 </div>
 
-<!-- 用户信息+排行榜（登录后显示） -->
+<!-- 叩拜排行榜（登录后显示） -->
 <div id="userInfoBar" class="user-info-bar" style="display:none;">
-  <div class="user-info-header">
-    <span id="userInfoName" class="user-info-name">奴才</span>
-    <span class="user-info-gold">🪙 <span id="userInfoGold">0</span></span>
-    <button class="user-logout-btn" onclick="userLogout()" title="退出">🚪</button>
-  </div>
-  <div class="rank-title">🙇 叩拜排行榜 · 前10名</div>
+  <div class="rank-title">🙇 叩拜榜</div>
   <div class="rank-list" id="rankList"></div>
-  <div class="rank-my" id="rankMy"></div>
+  <div class="rank-user-info" id="rankUserInfo"></div>
 </div>
 
 <!-- 管理员登录弹窗 -->

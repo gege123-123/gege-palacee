@@ -468,13 +468,16 @@ function updateUserInfoBar() {
   var bar = document.getElementById('userInfoBar');
   if (state.currentUser) {
     bar.style.display = 'flex';
-    var nameEl = document.getElementById('userInfoName');
-    if (nameEl) {
-      nameEl.textContent = (state.currentUser.servantName || '奴才');
-      nameEl.title = state.currentUser.username;
+    // 更新用户信息区
+    var userInfoEl = document.getElementById('rankUserInfo');
+    if (userInfoEl) {
+      userInfoEl.innerHTML = 
+        '<div class="info-row"><span>' + (state.currentUser.servantName || '奴才') + '</span></div>' +
+        '<div class="info-row"><span>🪙</span><span>' + state.gold + '</span></div>' +
+        '<div class="info-row"><span>🙇</span><span>' + state.kneelCount + '</span></div>' +
+        '<button class="rank-logout" onclick="userLogout()">退出</button>';
     }
-    var goldEl = document.getElementById('userInfoGold');
-    if (goldEl) goldEl.textContent = state.gold;
+    updateRankDisplay();
   } else {
     bar.style.display = 'none';
   }
@@ -766,15 +769,22 @@ function updateGoldDisplay() {
 
 async function updateRankDisplay() {
   var rankList = document.getElementById('rankList');
-  var rankMy = document.getElementById('rankMy');
   if (!rankList) return;
   
   var myUsername = state.currentUser ? state.currentUser.username : null;
   var myServantName = state.currentUser ? state.currentUser.servantName : '奴才';
   var myKneel = state.kneelCount || 0;
-  var myRank = 0;
   
-  // 默认排行榜（使用缓存数据）
+  var myRankItem = '';
+  if (myKneel > 0) {
+    myRankItem = '<div class="rank-item my-rank">' +
+      '<span class="rank-num">我</span>' +
+      '<span class="rank-name">' + myServantName + '</span>' +
+      '<span class="rank-value">🙇' + myKneel + '</span>' +
+      '</div>';
+  }
+  
+  // 默认排行榜
   var defaultRankList = [
     { servantName: '小狗子', kneelCount: 9999 },
     { servantName: '贱婢', kneelCount: 8888 },
@@ -788,71 +798,32 @@ async function updateRankDisplay() {
     { servantName: '小厮', kneelCount: 520 }
   ];
   
-  // 从服务器获取真实排行榜（按叩拜次数排序）
+  // 从服务器获取叩拜排行榜
   try {
     var serverRank = await apiRequest('/api/user/kneel-rank');
     if (serverRank && serverRank.success && serverRank.rankList && serverRank.rankList.length > 0) {
       var rankData = serverRank.rankList.slice(0, 10);
-      
-      // 计算我的排名
-      for (var i = 0; i < rankData.length; i++) {
-        if (rankData[i].username === myUsername) {
-          myRank = i + 1;
-          break;
-        }
-      }
-      
-      // 渲染排行榜
-      var rankHtml = '';
-      for (var j = 0; j < rankData.length; j++) {
-        var rankNum = j + 1;
-        var rClass = rankNum <= 3 ? 'rank-item top-rank' : 'rank-item';
-        var medal = rankNum === 1 ? '🥇' : rankNum === 2 ? '🥈' : rankNum === 3 ? '🥉' : rankNum;
-        var servantLabel = rankData[j].servantName || rankData[j].username;
-        rankHtml += '<div class="' + rClass + '">' +
-          '<span class="rank-num">' + medal + '</span>' +
-          '<span class="rank-name">' + servantLabel + '</span>' +
-          '<span class="rank-value">' + (rankData[j].kneelCount || 0) + '次</span>' +
-          '</div>';
-      }
-      rankList.innerHTML = rankHtml;
+      rankList.innerHTML = myRankItem + renderRankHtml(rankData);
     } else {
-      // 使用默认数据
-      renderDefaultRank(defaultRankList, rankList);
+      rankList.innerHTML = myRankItem + renderRankHtml(defaultRankList);
     }
   } catch(e) {
-    // 使用默认数据
-    renderDefaultRank(defaultRankList, rankList);
-  }
-  
-  // 显示我的排名
-  if (rankMy) {
-    if (myRank > 0) {
-      rankMy.innerHTML = '<span class="rank-my-label">我的排名</span> ' +
-        '<span class="rank-my-value">第' + myRank + '名</span> ' +
-        '🙇' + myKneel + '次';
-    } else if (myUsername) {
-      rankMy.innerHTML = '<span class="rank-my-label">🙇 ' + myServantName + '：</span> ' +
-        '<span class="rank-my-value">' + myKneel + '次</span>' +
-        '<span style="color:#DAA520;font-size:10px;">（未进前10）</span>';
-    } else {
-      rankMy.innerHTML = '';
-    }
+    rankList.innerHTML = myRankItem + renderRankHtml(defaultRankList);
   }
 }
 
-function renderDefaultRank(rankData, rankList) {
+function renderRankHtml(rankData) {
   var rankHtml = '';
   for (var i = 0; i < rankData.length; i++) {
     var rankNum = i + 1;
     var medal = rankNum === 1 ? '🥇' : rankNum === 2 ? '🥈' : rankNum === 3 ? '🥉' : rankNum;
     rankHtml += '<div class="rank-item">' +
       '<span class="rank-num">' + medal + '</span>' +
-      '<span class="rank-name">' + rankData[i].servantName + '</span>' +
-      '<span class="rank-value">' + (rankData[i].kneelCount || 0) + '次</span>' +
+      '<span class="rank-name">' + (rankData[i].servantName || rankData[i].username) + '</span>' +
+      '<span class="rank-value">🙇' + (rankData[i].kneelCount || 0) + '</span>' +
       '</div>';
   }
-  rankList.innerHTML = rankHtml;
+  return rankHtml;
 }
 
 // ============ 充值功能 ============

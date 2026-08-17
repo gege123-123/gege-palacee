@@ -1348,6 +1348,25 @@ app.post('/api/user/tribute', (req, res) => {
 });
 
 // 获取排行榜
+// 叩拜排行榜（按叩拜次数排序）
+app.get('/api/user/kneel-rank', (req, res) => {
+  try {
+    const rankList = Object.values(users)
+      .sort((a, b) => (b.kneelCount || 0) - (a.kneelCount || 0))
+      .slice(0, 50)
+      .map(user => ({
+        username: user.username,
+        servantName: user.servantName,
+        kneelCount: user.kneelCount || 0
+      }));
+    
+    res.json({ success: true, rankList });
+  } catch (error) {
+    res.status(500).json({ success: false, message: '获取排行榜失败' });
+  }
+});
+
+// 奉献排行榜（按奉献金币排序）
 app.get('/api/user/rank', (req, res) => {
   try {
     const rankList = Object.values(users)

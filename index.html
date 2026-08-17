@@ -76,14 +76,16 @@
   <span>⚙</span>
 </div>
 
-<!-- 用户信息显示（登录后显示） -->
+<!-- 用户信息+排行榜（登录后显示） -->
 <div id="userInfoBar" class="user-info-bar" style="display:none;">
-  <span id="userInfoName">奴才</span>
-  <span class="user-info-divider">|</span>
-  <span>🪙 <span id="userInfoGold">0</span></span>
-  <span class="user-info-divider">|</span>
-  <span>叩拜 <span id="userInfoKneel">0</span> 次</span>
-  <button class="user-logout-btn" onclick="userLogout()" title="退出">🚪</button>
+  <div class="user-info-header">
+    <span id="userInfoName" class="user-info-name">奴才</span>
+    <span class="user-info-gold">🪙 <span id="userInfoGold">0</span></span>
+    <button class="user-logout-btn" onclick="userLogout()" title="退出">🚪</button>
+  </div>
+  <div class="rank-title">🙇 叩拜排行榜 · 前10名</div>
+  <div class="rank-list" id="rankList"></div>
+  <div class="rank-my" id="rankMy"></div>
 </div>
 
 <!-- 管理员登录弹窗 -->

@@ -43,6 +43,167 @@ var state = {
 // 全局变量（兼容旧代码）
 var currentGegeTab = 1;
 
+// ============ IndexedDB 存储系统 ============
+// 使用IndexedDB存储大图数据，避免localStorage 5MB限制
+var DB_NAME = 'gege_palace_db';
+var DB_VERSION = 1;
+var STORE_GEGE_PHOTOS = 'gege_photos';
+var STORE_META = 'meta';
+var gegeDB = null;
+
+function openGegeDB() {
+  return new Promise(function(resolve, reject) {
+    if (gegeDB) { resolve(gegeDB); return; }
+    
+    var request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = function(e) {
+      var db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_GEGE_PHOTOS)) {
+        db.createObjectStore(STORE_GEGE_PHOTOS, { keyPath: 'id', autoIncrement: false });
+      }
+      if (!db.objectStoreNames.contains(STORE_META)) {
+        db.createObjectStore(STORE_META, { keyPath: 'key', autoIncrement: false });
+      }
+    };
+    request.onsuccess = function(e) {
+      gegeDB = e.target.result;
+      resolve(gegeDB);
+    };
+    request.onerror = function(e) {
+      reject(e.target.error);
+    };
+  });
+}
+
+async function savePhotosToDB(gegeId, photos) {
+  try {
+    var db = await openGegeDB();
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(STORE_GEGE_PHOTOS, 'readwrite');
+      var store = tx.objectStore(STORE_GEGE_PHOTOS);
+      var key = 'gege_' + gegeId;
+      
+      store.put({ id: key, photos: photos, updatedAt: Date.now() });
+      
+      tx.oncomplete = function() { resolve(true); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  } catch(e) {
+    console.error('IndexedDB保存失败:', e.message);
+    return false;
+  }
+}
+
+async function loadPhotosFromDB(gegeId) {
+  try {
+    var db = await openGegeDB();
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(STORE_GEGE_PHOTOS, 'readonly');
+      var store = tx.objectStore(STORE_GEGE_PHOTOS);
+      var key = 'gege_' + gegeId;
+      var request = store.get(key);
+      
+      request.onsuccess = function() {
+        if (request.result && request.result.photos) {
+          resolve(request.result.photos);
+        } else {
+          resolve(null);
+        }
+      };
+      request.onerror = function() { reject(request.error); };
+    });
+  } catch(e) {
+    console.error('IndexedDB加载失败:', e.message);
+    return null;
+  }
+}
+
+async function clearPhotosInDB(gegeId) {
+  try {
+    var db = await openGegeDB();
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(STORE_GEGE_PHOTOS, 'readwrite');
+      var store = tx.objectStore(STORE_GEGE_PHOTOS);
+      var key = 'gege_' + gegeId;
+      store.delete(key);
+      tx.oncomplete = function() { resolve(true); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  } catch(e) {
+    console.error('IndexedDB删除失败:', e.message);
+    return false;
+  }
+}
+
+async function saveMetaToDB(key, value) {
+  try {
+    var db = await openGegeDB();
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(STORE_META, 'readwrite');
+      var store = tx.objectStore(STORE_META);
+      store.put({ key: key, value: value, updatedAt: Date.now() });
+      tx.oncomplete = function() { resolve(true); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  } catch(e) {
+    return false;
+  }
+}
+
+async function loadMetaFromDB(key) {
+  try {
+    var db = await openGegeDB();
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(STORE_META, 'readonly');
+      var store = tx.objectStore(STORE_META);
+      var request = store.get(key);
+      request.onsuccess = function() {
+        resolve(request.result ? request.result.value : null);
+      };
+      request.onerror = function() { reject(request.error); };
+    });
+  } catch(e) {
+    return null;
+  }
+}
+
+// 压缩图片 - 自动调整大小
+function compressImage(dataUrl, maxWidth, quality) {
+  return new Promise(function(resolve) {
+    var img = new Image();
+    img.onload = function() {
+      var w = img.width;
+      var h = img.height;
+      var maxW = maxWidth || 1200;
+      var maxQ = quality || 0.8;
+      
+      if (w <= maxW && maxQ >= 0.8) {
+        resolve(dataUrl);
+        return;
+      }
+      
+      if (w > maxW) {
+        h = Math.round(h * maxW / w);
+        w = maxW;
+      }
+      
+      var canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      
+      try {
+        resolve(canvas.toDataURL('image/jpeg', maxQ));
+      } catch(e) {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = function() { resolve(dataUrl); };
+    img.src = dataUrl;
+  });
+}
+
 // ============ 服务器API交互 ============
 // 动态获取API基础地址，确保手机端也能正常访问
 var API_BASE = '';
@@ -211,6 +372,7 @@ async function userRegister() {
       localStorage.setItem('gege_user_token', data.token);
       localStorage.setItem('gege_user_name', username);
       localStorage.setItem('gege_servant_name', data.user.servantName);
+      saveAccountMemory();
       
       closeUserLoginModal();
       updateUserInfoBar();
@@ -249,6 +411,7 @@ async function userLogin() {
     localStorage.setItem('gege_user_token', data.token);
     localStorage.setItem('gege_user_name', username);
     localStorage.setItem('gege_servant_name', data.user.servantName);
+    saveAccountMemory();
     
     closeUserLoginModal();
     updateUserInfoBar();
@@ -332,6 +495,8 @@ async function loadGoldFromServer() {
     updateGoldDisplay();
     updateUserInfoBar();
     updateRankDisplay();
+    // 保存账户记忆到IndexedDB
+    saveAccountMemory();
   }
 }
 
@@ -434,6 +599,110 @@ async function syncLocalAccountFromServer() {
     updateGoldDisplay();
     updateUserInfoBar();
     updateRankDisplay();
+  }
+}
+
+// ============ 账户记忆系统 ============
+// 保存账户记忆（localStorage + IndexedDB双保险）
+function saveAccountMemory() {
+  try {
+    var accountData = {
+      token: state.userToken || localStorage.getItem('gege_user_token'),
+      username: state.userName || localStorage.getItem('gege_user_name'),
+      servantName: (state.currentUser && state.currentUser.servantName) || localStorage.getItem('gege_servant_name'),
+      gold: state.gold,
+      totalTributed: state.totalTributed,
+      kneelCount: state.kneelCount,
+      savedAt: Date.now()
+    };
+    
+    // localStorage同步保存（快速访问）
+    localStorage.setItem('gege_account_memory', JSON.stringify(accountData));
+    
+    // IndexedDB异步保存（可靠持久化）
+    if (state.userToken) {
+      saveMetaToDB('account_memory', accountData).catch(function() {});
+    }
+    
+    console.log('✅ 账户记忆已保存：' + (accountData.servantName || accountData.username) + ' 金币:' + accountData.gold);
+  } catch(e) {
+    console.warn('账户记忆保存失败:', e.message);
+  }
+}
+
+// 恢复账户记忆
+async function restoreAccountMemory() {
+  try {
+    // 先从localStorage恢复（快速）
+    var saved = localStorage.getItem('gege_account_memory');
+    if (saved) {
+      var account = JSON.parse(saved);
+      if (account && account.token) {
+        state.userToken = account.token;
+        state.userName = account.username || '';
+        state.gold = account.gold || 0;
+        state.totalTributed = account.totalTributed || 0;
+        state.kneelCount = account.kneelCount || 0;
+        if (account.username) {
+          state.currentUser = {
+            username: account.username,
+            servantName: account.servantName || '奴才'
+          };
+        }
+        
+        // 确保localStorage各个字段也同步
+        localStorage.setItem('gege_user_token', account.token);
+        localStorage.setItem('gege_user_name', account.username || '');
+        localStorage.setItem('gege_servant_name', account.servantName || '');
+        localStorage.setItem('gege_local_gold', account.gold.toString());
+        localStorage.setItem('gege_local_kneel', account.kneelCount.toString());
+        localStorage.setItem('gege_local_total_tributed', account.totalTributed.toString());
+        
+        if (state.currentUser) {
+          updateUserInfoBar();
+          updateGoldDisplay();
+          updateRankDisplay();
+        }
+        
+        console.log('✅ 账户记忆已恢复：' + (account.servantName || account.username));
+        
+        // 后台从服务器验证token有效性
+        if (account.token) {
+          loadGoldFromServer().catch(function() {
+            console.warn('从服务器同步账户失败，使用本地缓存数据');
+          });
+        }
+        return;
+      }
+    }
+    
+    // 如果localStorage没有，尝试从IndexedDB恢复
+    var dbAccount = await loadMetaFromDB('account_memory');
+    if (dbAccount && dbAccount.token) {
+      state.userToken = dbAccount.token;
+      state.userName = dbAccount.username || '';
+      state.gold = dbAccount.gold || 0;
+      state.totalTributed = dbAccount.totalTributed || 0;
+      state.kneelCount = dbAccount.kneelCount || 0;
+      if (dbAccount.username) {
+        state.currentUser = {
+          username: dbAccount.username,
+          servantName: dbAccount.servantName || '奴才'
+        };
+      }
+      
+      // 恢复到localStorage
+      saveAccountMemory();
+      
+      if (state.currentUser) {
+        updateUserInfoBar();
+        updateGoldDisplay();
+        updateRankDisplay();
+      }
+      console.log('✅ 从IndexedDB恢复账户记忆');
+    }
+  } catch(e) {
+    console.warn('账户记忆恢复失败:', e.message);
   }
 }
 
@@ -1975,8 +2244,8 @@ function cancelUploadConfirm(btn) {
   showToast('已取消上传');
 }
 
-// 确认上传格格照片
-function confirmGegeUpload(gegeId) {
+// 确认上传格格照片（带压缩和IndexedDB保存）
+async function confirmGegeUpload(gegeId) {
   if (!window._pendingUpload || window._pendingUpload.gegeId !== gegeId) {
     showToast('上传数据已失效，请重新选择');
     return;
@@ -1984,11 +2253,24 @@ function confirmGegeUpload(gegeId) {
   
   var photos = window._pendingUpload.photos;
   var totalBefore = state.gegePhotos[gegeId].length;
-  state.gegePhotos[gegeId] = state.gegePhotos[gegeId].concat(photos);
   
-  var saveResult = saveGegePhotos(gegeId);
+  showToast('💾 正在压缩和保存照片...');
+  
+  // 压缩图片（手机端更关键）
+  var compressedPhotos = [];
+  for (var i = 0; i < photos.length; i++) {
+    var compressed = await compressImage(photos[i].url, 1080, 0.85);
+    compressedPhotos.push({
+      url: compressed,
+      name: photos[i].name || ('photo_' + Date.now() + '_' + i)
+    });
+  }
+  
+  state.gegePhotos[gegeId] = state.gegePhotos[gegeId].concat(compressedPhotos);
+  
+  var saveResult = await saveGegePhotos(gegeId);
   if (!saveResult) {
-    showToast('保存失败！存储空间可能已满，请减少照片数量');
+    showToast('保存失败！请重试或减少照片数量');
     return;
   }
   
@@ -1999,13 +2281,12 @@ function confirmGegeUpload(gegeId) {
   var countEl = document.getElementById('gegeUploadCount');
   if (countEl) countEl.textContent = state.gegePhotos[gegeId].length;
   
-  // 关闭确认对话框
   var modals = document.querySelectorAll('.modal-overlay');
   for (var m = 0; m < modals.length; m++) modals[m].remove();
   window._pendingUpload = null;
   
   var total = state.gegePhotos[gegeId].length;
-  showToast('✅ ' + GEGE_NAMES[gegeId] + ' 保存成功！共' + total + '张（新增' + photos.length + '张）');
+  showToast('✅ ' + GEGE_NAMES[gegeId] + ' 保存成功！共' + total + '张（新增' + compressedPhotos.length + '张）');
 }
 
 // ============ 手机端相册Tab切换 ============
@@ -2068,44 +2349,101 @@ function initMobileWall() {
   });
 }
 
-// 保存格格照片到localStorage（带错误处理）
-function saveGegePhotos(gegeId) {
+// 保存格格照片（localStorage同步缓存 + IndexedDB异步持久化双保险）
+async function saveGegePhotos(gegeId) {
   try {
-    var data = JSON.stringify(state.gegePhotos[gegeId]);
-    var key = 'gege_photos_' + gegeId;
-    localStorage.setItem(key, data);
-    
-    // 验证保存是否成功
-    var verify = localStorage.getItem(key);
-    if (verify !== data) {
-      console.error('保存验证失败：gege' + gegeId);
-      return false;
+    var photos = state.gegePhotos[gegeId];
+    if (!photos || photos.length === 0) {
+      await clearPhotosInDB(gegeId);
+      try { localStorage.removeItem('gege_photos_' + gegeId); } catch(e) {}
+      return true;
     }
     
-    console.log('✅ 保存成功：' + GEGE_NAMES[gegeId] + '，' + state.gegePhotos[gegeId].length + '张照片');
-    return true;
+    // 1. 同步保存到localStorage（快速缓存，立即生效）
+    var localStorageSaved = false;
+    try {
+      var data = JSON.stringify(photos);
+      localStorage.setItem('gege_photos_' + gegeId, data);
+      localStorageSaved = true;
+    } catch(e) {
+      // localStorage满了，尝试清理其他格格的照片再试
+      if (e.name === 'QuotaExceededError' || e.code === 22 || e.message.indexOf('quota') !== -1) {
+        console.warn('localStorage已满，尝试清理旧数据...');
+        // 按优先级清理其他格格的缓存
+        for (var g = 1; g <= 4; g++) {
+          if (g !== gegeId) {
+            try { localStorage.removeItem('gege_photos_' + g); } catch(e2) {}
+          }
+        }
+        // 再试一次
+        try {
+          var data2 = JSON.stringify(photos);
+          localStorage.setItem('gege_photos_' + gegeId, data2);
+          localStorageSaved = true;
+          console.log('localStorage清理后保存成功');
+        } catch(e3) {
+          console.warn('localStorage仍然失败，仅使用IndexedDB');
+        }
+      } else {
+        console.warn('localStorage保存失败:', e.message);
+      }
+    }
+    
+    // 2. 保存到IndexedDB（主存储，更可靠）
+    var result = await savePhotosToDB(gegeId, photos);
+    if (result) {
+      console.log('✅ 照片保存成功：' + GEGE_NAMES[gegeId] + '，' + photos.length + '张' + 
+        (localStorageSaved ? '(localStorage+IndexedDB)' : '(仅IndexedDB)'));
+      return true;
+    }
+    
+    // IndexedDB失败但localStorage成功，仍然返回true
+    if (localStorageSaved) {
+      console.log('⚠️ IndexedDB保存失败，但localStorage缓存成功');
+      return true;
+    }
+    
+    return false;
   } catch(e) {
     console.error('保存格格照片失败:', e.message);
-    if (e.name === 'QuotaExceededError' || e.code === 22) {
-      console.error('存储空间不足！尝试压缩或减少照片数量');
-    }
     return false;
   }
 }
 
-// 加载格格照片（带错误处理和验证）
-function loadGegePhotos(gegeId) {
+// 加载格格照片（优先IndexedDB，fallback localStorage）
+async function loadGegePhotos(gegeId) {
   try {
-    var key = 'gege_photos_' + gegeId;
-    var saved = localStorage.getItem(key);
+    // 优先从IndexedDB加载
+    var photos = await loadPhotosFromDB(gegeId);
     
-    if (saved) {
-      state.gegePhotos[gegeId] = JSON.parse(saved);
-      console.log('📂 加载' + GEGE_NAMES[gegeId] + '照片：' + state.gegePhotos[gegeId].length + '张');
-    } else {
-      state.gegePhotos[gegeId] = [];
-      console.log('📂 ' + GEGE_NAMES[gegeId] + '相册为空');
+    if (photos && Array.isArray(photos) && photos.length > 0) {
+      state.gegePhotos[gegeId] = photos;
+      console.log('📂 IndexedDB加载' + GEGE_NAMES[gegeId] + '照片：' + photos.length + '张');
+      
+      // 同步更新localStorage缓存
+      try {
+        localStorage.setItem('gege_photos_' + gegeId, JSON.stringify(photos));
+      } catch(e) {}
+      return;
     }
+    
+    // Fallback: 从localStorage加载（旧数据迁移）
+    var saved = localStorage.getItem('gege_photos_' + gegeId);
+    if (saved) {
+      try {
+        var parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          state.gegePhotos[gegeId] = parsed;
+          // 迁移到IndexedDB
+          savePhotosToDB(gegeId, parsed);
+          console.log('📂 localStorage迁移' + GEGE_NAMES[gegeId] + '照片：' + parsed.length + '张');
+          return;
+        }
+      } catch(e) {}
+    }
+    
+    state.gegePhotos[gegeId] = [];
+    console.log('📂 ' + GEGE_NAMES[gegeId] + '相册为空');
   } catch(e) {
     console.error('加载格格照片失败:', e.message);
     state.gegePhotos[gegeId] = [];
@@ -2118,9 +2456,7 @@ function loadGegePhotos(gegeId) {
     if (goldSaved) {
       state.gegeGold[gegeId] = parseInt(goldSaved) || 0;
     }
-  } catch(e) {
-    console.error('加载金币失败:', e.message);
-  }
+  } catch(e) {}
 }
 
 // 渲染单个格格的照片墙（优化版 - 减少DOM操作）
@@ -2209,6 +2545,7 @@ function clearGegePhotos(gegeId) {
   
   state.gegePhotos[gegeId] = [];
   localStorage.removeItem('gege_photos_' + gegeId);
+  clearPhotosInDB(gegeId);
   stopGegeScrollAnimation(gegeId);
   renderGegeWall(gegeId);
   renderGegePhotoList(gegeId);
@@ -3645,22 +3982,61 @@ function switchArchiveTab(tabElement, tabName) {
 }
 
 // ============ 启动时加载 ============
-function loadGalleryAndTraining() {
+async function loadGalleryAndTraining() {
   loadGallerySlots();
   
+  // 先用localStorage同步加载（立即显示，不等待IndexedDB）
   for (var i = 1; i <= 4; i++) {
-    loadGegePhotos(i);
+    loadGegePhotosSync(i);
     renderGegeWall(i);
     if (state.gegePhotos[i].length >= 2) {
       startGegeScrollAnimation(i);
     }
   }
+  
+  // 再异步从IndexedDB更新（后台加载更可靠的数据）
+  for (var i = 1; i <= 4; i++) {
+    try {
+      await loadGegePhotos(i);
+      renderGegeWall(i);
+      if (state.gegePhotos[i].length >= 2) {
+        startGegeScrollAnimation(i);
+      }
+    } catch(e) {
+      console.warn('异步加载格格' + i + '照片失败，使用localStorage缓存');
+    }
+  }
+  
   bindGegeUploadInputs();
   initMobileWall();
   
   loadTrainingTiers();
   renderTributeGrid();
   checkGalleryLock();
+  
+  console.log('✅ 相册加载完成，四墙照片数：' + 
+    state.gegePhotos[1].length + '/' + 
+    state.gegePhotos[2].length + '/' + 
+    state.gegePhotos[3].length + '/' + 
+    state.gegePhotos[4].length);
+}
+
+// 同步加载（从localStorage，立即返回，用于首屏渲染）
+function loadGegePhotosSync(gegeId) {
+  try {
+    var saved = localStorage.getItem('gege_photos_' + gegeId);
+    if (saved) {
+      var parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        state.gegePhotos[gegeId] = parsed;
+        console.log('📂 localStorage快速加载' + GEGE_NAMES[gegeId] + '照片：' + parsed.length + '张');
+        return;
+      }
+    }
+  } catch(e) {
+    console.warn('localStorage读取格格' + gegeId + '照片失败:', e.message);
+  }
+  state.gegePhotos[gegeId] = [];
 }
 
 // ============ 新版支付配置UI处理 ============
@@ -3860,29 +4236,89 @@ function openPaymentDoc() {
 
 // ============ 启动时加载 ============
 init();
-loadGalleryAndTraining();
+// loadGalleryAndTraining现在是async，用.then确保完成后再继续
+loadGalleryAndTraining().then(function() {
+  console.log('✅ 相册和训练数据加载完成');
+}).catch(function(e) {
+  console.error('❌ 加载失败:', e.message);
+});
 initPaymentConfigUI();
 
-// 页面离开前保存所有照片数据
+// 页面离开前保存所有照片数据（同步保存到localStorage，确保不丢失）
 window.addEventListener('pagehide', function() {
   for (var i = 1; i <= 4; i++) {
     if (state.gegePhotos[i] && state.gegePhotos[i].length > 0) {
-      saveGegePhotos(i);
+      // 同步保存到localStorage（确保立即保存）
+      try {
+        localStorage.setItem('gege_photos_' + i, JSON.stringify(state.gegePhotos[i]));
+      } catch(e) {
+        console.warn('pagehide保存localStorage失败(格格' + i + '):', e.message);
+        // localStorage满了，清理旧数据再试
+        if (e.name === 'QuotaExceededError' || e.code === 22) {
+          try {
+            // 清除其他格格的缓存再试
+            localStorage.removeItem('gege_photos_' + ((i % 4) + 1));
+            localStorage.setItem('gege_photos_' + i, JSON.stringify(state.gegePhotos[i]));
+          } catch(e2) {}
+        }
+      }
+      // 异步保存到IndexedDB（后台进行）
+      saveGegePhotos(i).catch(function() {});
     }
   }
+  // 保存账户记忆
+  saveAccountMemory();
 });
 
 // 页面显示时重新加载（从后台返回时）
 window.addEventListener('pageshow', function(e) {
-  if (e.persisted) {
-    // 从缓存恢复，重新加载照片
+  // 无论是否persisted，都重新加载（确保数据最新）
+  for (var i = 1; i <= 4; i++) {
+    // 先同步加载localStorage（立即显示）
+    loadGegePhotosSync(i);
+    renderGegeWall(i);
+    if (state.gegePhotos[i].length >= 2) {
+      startGegeScrollAnimation(i);
+    }
+  }
+  // 再异步从IndexedDB更新
+  for (var i = 1; i <= 4; i++) {
+    loadGegePhotos(i).then(function() {
+      renderGegeWall(i);
+      if (state.gegePhotos[i].length >= 2) {
+        startGegeScrollAnimation(i);
+      }
+    }).catch(function() {});
+  }
+  // 恢复账户记忆
+  restoreAccountMemory();
+  console.log('🔄 pageshow: 已重新加载照片和账户');
+});
+
+// 可见性变化时保存/恢复（手机端切后台时触发）
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'hidden') {
+    // 切到后台时保存
     for (var i = 1; i <= 4; i++) {
-      loadGegePhotos(i);
+      if (state.gegePhotos[i] && state.gegePhotos[i].length > 0) {
+        try {
+          localStorage.setItem('gege_photos_' + i, JSON.stringify(state.gegePhotos[i]));
+        } catch(e) {}
+        saveGegePhotos(i).catch(function() {});
+      }
+    }
+    saveAccountMemory();
+    console.log('📱 切到后台，已保存数据');
+  } else if (document.visibilityState === 'visible') {
+    // 从后台恢复时重新加载
+    for (var i = 1; i <= 4; i++) {
+      loadGegePhotosSync(i);
       renderGegeWall(i);
       if (state.gegePhotos[i].length >= 2) {
         startGegeScrollAnimation(i);
       }
     }
-    console.log('🔄 从后台恢复，已重新加载照片');
+    restoreAccountMemory();
+    console.log('📱 回到前台，已恢复数据');
   }
 });

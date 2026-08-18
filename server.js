@@ -93,13 +93,50 @@ migrateOldData();
 function loadUsers() {
   try {
     if (fs.existsSync(USERS_FILE)) {
-      return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+      let content = fs.readFileSync(USERS_FILE, 'utf8');
+      // 移除 BOM 头
+      if (content.charCodeAt(0) === 0xFEFF) {
+        content = content.substring(1);
+      }
+      return JSON.parse(content);
     }
   } catch (e) {}
   return {};
 }
 
 function saveUsers(users) {
+  try {
+    // 自动备份（保留最近5个备份）
+    const backupDir = path.join(__dirname, 'data', 'backups');
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    
+    // 检查是否需要备份（数据有变动时）
+    const existingFiles = fs.readdirSync(backupDir).filter(f => f.startsWith('users_backup_')).sort();
+    if (existingFiles.length >= 5) {
+      fs.unlinkSync(path.join(backupDir, existingFiles[0]));
+    }
+    
+    // 每次保存都创建备份
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupFile = path.join(backupDir, `users_backup_${timestamp}.json`);
+    fs.writeFileSync(backupFile, JSON.stringify(users, null, 2));
+    
+    // 清理超过24小时的备份
+    const allBackups = fs.readdirSync(backupDir).filter(f => f.startsWith('users_backup_'));
+    const now = Date.now();
+    allBackups.forEach(file => {
+      const filePath = path.join(backupDir, file);
+      const stat = fs.statSync(filePath);
+      if (now - stat.mtimeMs > 24 * 60 * 60 * 1000) {
+        fs.unlinkSync(filePath);
+      }
+    });
+  } catch (e) {
+    console.warn('备份失败:', e.message);
+  }
+  
   fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
@@ -1096,12 +1133,11 @@ app.post('/api/user/register', (req, res) => {
     }
     
     if (users[username]) {
-      return res.status(400).json({ success: false, message: '此名字已被其他奴才占用' });
+      return res.status(400).json({ success: false, message: '此名字已被占用' });
     }
     
-    // 卑微奴才名字列表
-    const servantNames = ['小狗', '奴才', '贱婢', '奴婢', '小厮', '奴仆', '下贱胚', '狗奴才', '可怜虫', '哈巴狗'];
-    const finalServantName = servantName || servantNames[Math.floor(Math.random() * servantNames.length)];
+    // 默认使用真实注册名字
+    const finalServantName = username;
     
     // 加密密码
     const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
@@ -1127,7 +1163,7 @@ app.post('/api/user/register', (req, res) => {
     
     res.json({ 
       success: true, 
-      message: '奴才注册成功！',
+      message: '注册成功！欢迎加入',
       token: token,
       user: {
         username: username,
@@ -1154,12 +1190,12 @@ app.post('/api/user/login', (req, res) => {
     
     const user = users[username];
     if (!user) {
-      return res.status(400).json({ success: false, message: '此奴才不存在，请先注册' });
+      return res.status(400).json({ success: false, message: '此账号不存在，请先注册' });
     }
     
     const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
     if (hashedPassword !== user.password) {
-      return res.status(400).json({ success: false, message: '密码错误！奴才无礼！' });
+      return res.status(400).json({ success: false, message: '密码错误' });
     }
     
     const token = generateToken();
@@ -1168,7 +1204,7 @@ app.post('/api/user/login', (req, res) => {
     
     res.json({ 
       success: true, 
-      message: '奴才觐见成功！',
+      message: '登录成功！欢迎回来',
       token: token,
       user: {
         username: user.username,
@@ -1656,6 +1692,21 @@ const server = app.listen(PORT, () => {
   }
   
   console.log('【启动】服务器启动成功！监听端口:', PORT);
+  
+  // 启动时自动备份用户数据
+  try {
+    const users = loadUsers();
+    const backupDir = path.join(__dirname, 'data', 'backups');
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupFile = path.join(backupDir, `users_backup_startup_${timestamp}.json`);
+    fs.writeFileSync(backupFile, JSON.stringify(users, null, 2));
+    console.log(`【备份】启动时自动备份已创建: ${backupFile}`);
+  } catch (e) {
+    console.warn('【备份】启动备份失败:', e.message);
+  }
 });
 
 server.on('error', (err) => {

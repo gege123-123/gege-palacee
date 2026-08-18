@@ -322,14 +322,14 @@ async function testNetwork() {
 function showRegisterForm() {
   document.getElementById('loginForm').style.display = 'none';
   document.getElementById('registerForm').style.display = 'block';
-  document.getElementById('userLoginTitle').textContent = '奴才注册';
+  document.getElementById('userLoginTitle').textContent = '注册';
   if (!networkChecked) testNetwork();
 }
 
 function showLoginForm() {
   document.getElementById('registerForm').style.display = 'none';
   document.getElementById('loginForm').style.display = 'block';
-  document.getElementById('userLoginTitle').textContent = '奴才登录';
+  document.getElementById('userLoginTitle').textContent = '登录';
   if (!networkChecked) testNetwork();
 }
 
@@ -377,7 +377,7 @@ async function userRegister() {
       closeUserLoginModal();
       updateUserInfoBar();
       loadGoldFromServer();
-      showToast('奴才' + data.user.servantName + ' 注册成功！', 3000);
+      showToast(data.user.servantName + ' 注册成功！', 3000);
     } else {
       var msg = (data && data.message) ? data.message : '注册失败，请检查网络';
       showToast(msg, 3000);
@@ -397,7 +397,7 @@ async function userLogin() {
     return;
   }
   
-  showToast('正在觐见格格...');
+  showToast('正在登录...');
   
   var data = await apiRequest('/api/user/login', {
     method: 'POST',
@@ -411,12 +411,33 @@ async function userLogin() {
     localStorage.setItem('gege_user_token', data.token);
     localStorage.setItem('gege_user_name', username);
     localStorage.setItem('gege_servant_name', data.user.servantName);
+    
+    var loginCount = parseInt(localStorage.getItem('gege_login_count') || '0') + 1;
+    localStorage.setItem('gege_login_count', loginCount.toString());
+    localStorage.setItem('gege_last_login', Date.now().toString());
+    
     saveAccountMemory();
     
     closeUserLoginModal();
     updateUserInfoBar();
     syncLocalAccountFromServer();
-    showToast('奴才' + data.user.servantName + ' 觐见成功！', 3000);
+    
+    var servantName = data.user.servantName || username;
+    var greetings = [
+        servantName + ' 登录成功！欢迎回来！',
+        servantName + ' 回来了！想你了~',
+        servantName + ' 上线啦！金币还充裕吗？',
+        servantName + ' 归队！你的数据已同步',
+        servantName + ' 来啦！准备好开启新的一天了吗？'
+    ];
+    var greeting = greetings[Math.floor(Math.random() * greetings.length)];
+    showToast(greeting, 3500);
+    
+    setTimeout(function() {
+        if (state.gold < 10) {
+            showToast('⚠ 金币不足，快去充值吧！', 3000);
+        }
+    }, 2000);
   } else {
     showToast(data ? data.message : '登录失败');
   }
@@ -444,7 +465,7 @@ async function userLogout() {
   updateGoldDisplay();
   updateRankDisplay();
   showUserLoginModal();
-  showToast('奴才已退出，期待下次觐见');
+  showToast('已退出登录，期待下次再见');
 }
 
 function closeUserLoginModal() {
@@ -472,14 +493,55 @@ function updateUserInfoBar() {
     var userInfoEl = document.getElementById('rankUserInfo');
     if (userInfoEl) {
       userInfoEl.innerHTML = 
-        '<div class="info-row"><span>' + (state.currentUser.servantName || '奴才') + '</span></div>' +
+        '<div class="info-row"><span>' + (state.currentUser.servantName || state.currentUser.username || '用户') + '</span></div>' +
         '<div class="info-row"><span>🪙</span><span>' + state.gold + '</span></div>' +
         '<div class="info-row"><span>🙇</span><span>' + state.kneelCount + '</span></div>' +
         '<button class="rank-logout" onclick="userLogout()">退出</button>';
     }
+    initRankListState();
     updateRankDisplay();
+    updateServantStatusPanel();
   } else {
     bar.style.display = 'none';
+  }
+}
+
+function updateServantStatusPanel() {
+  var rankDisplay = document.getElementById('servantRankDisplay');
+  var progressText = document.getElementById('servantProgressText');
+  var progressFill = document.getElementById('servantProgressFill');
+  if (!rankDisplay) return;
+  
+  var tributed = state.totalTributed || 0;
+  var tiers = [
+    { cost: 0, name: '初入门槛' },
+    { cost: 100, name: '第一阶 · 入门' },
+    { cost: 500, name: '第二阶 · 驯化' },
+    { cost: 1000, name: '第三阶 · 深度驯化' },
+    { cost: 5000, name: '第四阶 · 忠诚' },
+    { cost: 10000, name: '第五阶 · 极品奴才' }
+  ];
+  
+  var currentTier = tiers[0];
+  var nextTier = tiers[1];
+  for (var i = tiers.length - 1; i >= 0; i--) {
+    if (tributed >= tiers[i].cost) {
+      currentTier = tiers[i];
+      nextTier = tiers[i + 1] || null;
+      break;
+    }
+  }
+  
+  rankDisplay.textContent = currentTier.name;
+  
+  if (nextTier) {
+    var progress = ((tributed - currentTier.cost) / (nextTier.cost - currentTier.cost)) * 100;
+    progress = Math.min(100, Math.max(0, progress));
+    progressFill.style.width = progress + '%';
+    progressText.textContent = '距离下一阶还需 ' + (nextTier.cost - tributed) + ' 金币';
+  } else {
+    progressFill.style.width = '100%';
+    progressText.textContent = '已达最高阶！格格最宠之奴才！';
   }
 }
 
@@ -619,6 +681,8 @@ function saveAccountMemory() {
       gold: state.gold,
       totalTributed: state.totalTributed,
       kneelCount: state.kneelCount,
+      loginCount: parseInt(localStorage.getItem('gege_login_count') || '0'),
+      lastLogin: localStorage.getItem('gege_last_login') || Date.now().toString(),
       savedAt: Date.now()
     };
     
@@ -652,7 +716,7 @@ async function restoreAccountMemory() {
         if (account.username) {
           state.currentUser = {
             username: account.username,
-            servantName: account.servantName || '奴才'
+            servantName: account.servantName || account.username || '用户'
           };
         }
         
@@ -693,7 +757,7 @@ async function restoreAccountMemory() {
       if (dbAccount.username) {
         state.currentUser = {
           username: dbAccount.username,
-          servantName: dbAccount.servantName || '奴才'
+          servantName: dbAccount.servantName || dbAccount.username || '用户'
         };
       }
       
@@ -765,6 +829,36 @@ function saveTotalTributed() {
 function updateGoldDisplay() {
   var el = document.getElementById('goldAmount');
   if (el) el.textContent = state.gold;
+  updateServantStatusPanel();
+}
+
+// 叩拜榜单展开/关闭
+function toggleRankList() {
+  var wrapper = document.getElementById('rankListWrapper');
+  var icon = document.getElementById('rankToggleIcon');
+  if (!wrapper) return;
+  
+  if (wrapper.style.display === 'none') {
+    wrapper.style.display = 'block';
+    if (icon) icon.textContent = '▼';
+    localStorage.setItem('gege_rank_list_collapsed', '0');
+    updateRankDisplay();
+  } else {
+    wrapper.style.display = 'none';
+    if (icon) icon.textContent = '▶';
+    localStorage.setItem('gege_rank_list_collapsed', '1');
+  }
+}
+
+// 初始化榜单折叠状态
+function initRankListState() {
+  var collapsed = localStorage.getItem('gege_rank_list_collapsed');
+  var wrapper = document.getElementById('rankListWrapper');
+  var icon = document.getElementById('rankToggleIcon');
+  if (collapsed === '1') {
+    if (wrapper) wrapper.style.display = 'none';
+    if (icon) icon.textContent = '▶';
+  }
 }
 
 async function updateRankDisplay() {
@@ -772,7 +866,7 @@ async function updateRankDisplay() {
   if (!rankList) return;
   
   var myUsername = state.currentUser ? state.currentUser.username : null;
-  var myServantName = state.currentUser ? state.currentUser.servantName : '奴才';
+  var myServantName = state.currentUser ? (state.currentUser.servantName || state.currentUser.username) : '用户';
   var myKneel = state.kneelCount || 0;
   
   var myRankItem = '';
@@ -784,18 +878,18 @@ async function updateRankDisplay() {
       '</div>';
   }
   
-  // 默认排行榜
+  // 默认排行榜（使用通用名字）
   var defaultRankList = [
-    { servantName: '小狗子', kneelCount: 9999 },
-    { servantName: '贱婢', kneelCount: 8888 },
-    { servantName: '狗奴才', kneelCount: 6666 },
-    { servantName: '下贱胚', kneelCount: 5200 },
-    { servantName: '可怜虫', kneelCount: 3800 },
-    { servantName: '哈巴狗', kneelCount: 2888 },
-    { servantName: '小的', kneelCount: 1800 },
-    { servantName: '奴才甲', kneelCount: 1200 },
-    { servantName: '奴婢', kneelCount: 888 },
-    { servantName: '小厮', kneelCount: 520 }
+    { servantName: '风云', kneelCount: 9999 },
+    { servantName: '月影', kneelCount: 8888 },
+    { servantName: '星河', kneelCount: 6666 },
+    { servantName: '逍遥', kneelCount: 5200 },
+    { servantName: '清风', kneelCount: 3800 },
+    { servantName: '明月', kneelCount: 2888 },
+    { servantName: '墨白', kneelCount: 1800 },
+    { servantName: '丹青', kneelCount: 1200 },
+    { servantName: '紫玉', kneelCount: 888 },
+    { servantName: '金风', kneelCount: 520 }
   ];
   
   // 从服务器获取叩拜排行榜
@@ -1190,7 +1284,13 @@ function confirmRechargeSuccess() {
 }
 
 function showRechargeSuccessUI(gold) {
-  showToast('🎉 充值成功！获得 ' + gold + ' 金币', 3000);
+  var successMessages = [
+    '🎉 上贡成功！奴才诚意已达！获得 ' + gold + ' 金币',
+    '🎉 格格已收到你的孝敬！' + gold + ' 金币已入账',
+    '🎉 奴才又近了一步！获得 ' + gold + ' 金币',
+    '🎉 上贡光荣！奴才继续努力！获得 ' + gold + ' 金币'
+  ];
+  showToast(successMessages[Math.floor(Math.random() * successMessages.length)], 3500);
   
   // 更新金币数字的动画效果
   var goldEl = document.getElementById('goldAmount');
@@ -1565,6 +1665,7 @@ function adminLogin() {
   var password = document.getElementById('adminPassword').value;
   if (password === 'gege123') {
     state.isAdmin = true;
+    localStorage.setItem('gege_is_admin', '1');
     closeAdminLogin();
     
     var adminPanel = document.getElementById('adminPanel');
@@ -1575,6 +1676,9 @@ function adminLogin() {
     
     showToast('格格驾到！控制殿已开启');
     document.getElementById('adminPassword').value = '';
+    
+    // 自动加载用户列表
+    updateGoldManageInfo();
   } else {
     showToast('口令错误，无法进入！');
   }
@@ -1582,6 +1686,7 @@ function adminLogin() {
 
 function logoutAdmin() {
   state.isAdmin = false;
+  localStorage.removeItem('gege_is_admin');
   
   var adminPanel = document.getElementById('adminPanel');
   if (adminPanel) adminPanel.style.display = 'none';
@@ -2070,8 +2175,7 @@ function uploadMediaFromPage() {
 var GEGE_NAMES = {
   1: '瓜尔佳格格',
   2: '爱新觉罗璇格格',
-  3: '爱新觉罗凌霜格格',
-  4: '镶黄旗古萌格格'
+  3: '镶黄旗古萌格格'
 };
 
 // 切换格格Tab（控制殿内）
@@ -2808,7 +2912,7 @@ function renderGoldSearchResults() {
   if (!resultsEl) return;
   
   if (goldSearchResults.length === 0) {
-    resultsEl.innerHTML = '<div style="color:#DAA520;text-align:center;padding:20px;">暂无奴才注册</div>';
+    resultsEl.innerHTML = '<div style="color:#DAA520;text-align:center;padding:20px;">暂无用户注册</div>';
     return;
   }
   
@@ -2819,7 +2923,6 @@ function renderGoldSearchResults() {
       '<div style="display:flex;justify-content:space-between;align-items:center;">' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
           '<span style="color:#FFD700;font-weight:bold;font-size:16px;">' + u.username + '</span>' +
-          '<span style="color:#DAA520;font-size:13px;">（' + (u.servantName || '奴才') + '）</span>' +
         '</div>' +
         '<div style="color:#FF4500;font-weight:bold;font-size:16px;">🪙 ' + (u.gold || 0) + '</div>' +
       '</div>' +
@@ -2833,7 +2936,7 @@ function renderGoldSearchResults() {
   resultsEl.innerHTML = html;
 }
 
-// 选中某个奴才进行金币调整
+// 选中某个用户进行金币调整
 function selectGoldUser(username) {
   if (!state.isAdmin) return;
   
@@ -2845,7 +2948,7 @@ function selectGoldUser(username) {
   var detail = document.getElementById('goldManageDetail');
   if (detail) detail.classList.remove('hidden');
   
-  document.getElementById('goldDetailName').textContent = '👤 ' + user.username + '（' + (user.servantName || '奴才') + '）';
+  document.getElementById('goldDetailName').textContent = '👤 ' + user.username;
   document.getElementById('goldDetailGold').textContent = user.gold || 0;
   document.getElementById('goldDetailTributed').textContent = user.totalTributed || 0;
   document.getElementById('goldDetailKneel').textContent = user.kneelCount || 0;
@@ -2854,10 +2957,10 @@ function selectGoldUser(username) {
   document.getElementById('goldAdjustInput').focus();
 }
 
-// 快速调整选中奴才的金币
+// 快速调整选中用户的金币
 function adjustSelectedGold(amount) {
   if (!state.isAdmin) { showToast('请格格先登录控制殿'); return; }
-  if (!selectedGoldUser) { showToast('请先选择一个奴才账户'); return; }
+  if (!selectedGoldUser) { showToast('请先选择一个用户账户'); return; }
   
   var reason = amount > 0 ? '格格赏赐' : '格格扣除';
   adjustUserGold(selectedGoldUser.username, amount, reason);
@@ -2866,7 +2969,7 @@ function adjustSelectedGold(amount) {
 // 确认自定义金额调整
 function confirmAdjustGold() {
   if (!state.isAdmin) { showToast('请格格先登录控制殿'); return; }
-  if (!selectedGoldUser) { showToast('请先选择一个奴才账户'); return; }
+  if (!selectedGoldUser) { showToast('请先选择一个用户账户'); return; }
   
   var input = document.getElementById('goldAdjustInput');
   if (!input || !input.value) { showToast('请输入金币数量'); return; }
@@ -3516,6 +3619,31 @@ function loadUnlockedAlbums() {
 // 页面加载后再执行，确保DOM已就绪
 document.addEventListener('DOMContentLoaded', function() {
   loadUnlockedAlbums();
+  
+  // 恢复管理员状态
+  if (localStorage.getItem('gege_is_admin') === '1') {
+    state.isAdmin = true;
+    var adminPanel = document.getElementById('adminPanel');
+    if (adminPanel) adminPanel.style.display = 'flex';
+    var adminUploadBig = document.getElementById('adminUploadBig');
+    if (adminUploadBig) adminUploadBig.style.display = 'block';
+    console.log('🔑 管理员状态已恢复');
+    // 自动加载用户列表
+    setTimeout(function() {
+      var searchInput = document.getElementById('goldSearchInput');
+      if (searchInput) searchGoldUsers();
+    }, 500);
+  }
+  
+  // 启动定时同步（每30秒从服务器同步一次数据，确保多端数据一致）
+  if (!window._dataSyncTimer) {
+    window._dataSyncTimer = setInterval(function() {
+      if (state.userToken && document.visibilityState === 'visible') {
+        loadGoldFromServer().catch(function() {});
+      }
+    }, 30000);
+    console.log('📊 数据同步定时器已启动（每30秒）');
+  }
 });
 // 如果DOM已经加载完成，立即执行
 if (document.readyState !== 'loading') {

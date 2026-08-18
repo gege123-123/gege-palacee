@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>格格的宫殿 · 爱新觉罗</title>
-<link rel="stylesheet" href="style.css?v=20260817r">
+<link rel="stylesheet" href="style.css?v=20260818a">
 </head>
 <body>
 
@@ -13,7 +13,7 @@
   <div class="modal-content user-login-modal">
     <div class="user-login-header">
       <div class="user-login-seal">🐾</div>
-      <h2 id="userLoginTitle">奴才登录</h2>
+      <h2 id="userLoginTitle">登录</h2>
     </div>
     
     <!-- 网络状态显示 -->
@@ -23,26 +23,28 @@
     </div>
     
     <div id="loginForm">
-      <p class="user-login-hint">奴才请报名觐见格格</p>
-      <input type="text" id="loginUsername" placeholder="奴才名号">
-      <input type="password" id="loginPassword" placeholder="觐见口令">
-      <button class="save-btn big" onclick="userLogin()">报名觐见</button>
-      <p class="user-switch" onclick="showRegisterForm()">奴才首次来此？点此注册</p>
+      <p class="user-login-hint">欢迎回来</p>
+      <p style="color:#8B6914;font-size:11px;text-align:center;margin:5px 0;">💡 你的名字和数据都会被铭记</p>
+      <input type="text" id="loginUsername" placeholder="用户名">
+      <input type="password" id="loginPassword" placeholder="密码">
+      <button class="save-btn big" onclick="userLogin()">登录</button>
+      <p class="user-switch" onclick="showRegisterForm()">首次来此？点此注册</p>
     </div>
     
     <div id="registerForm" style="display:none;">
-      <p class="user-login-hint">新奴才请登记造册</p>
-      <input type="text" id="registerUsername" placeholder="奴才名号（2-20字）">
-      <input type="password" id="registerPassword" placeholder="觐见口令（至少4位）">
-      <input type="password" id="registerPassword2" placeholder="确认口令">
-      <button class="save-btn big" onclick="userRegister()">登记造册</button>
-      <p class="user-switch" onclick="showLoginForm()">已有名号？点此登录</p>
+      <p class="user-login-hint">创建账号</p>
+      <p style="color:#8B6914;font-size:11px;text-align:center;margin:5px 0;">💡 注册后，你的金币、等级等数据都会被保存</p>
+      <input type="text" id="registerUsername" placeholder="用户名（2-20字）">
+      <input type="password" id="registerPassword" placeholder="密码（至少4位）">
+      <input type="password" id="registerPassword2" placeholder="确认密码">
+      <button class="save-btn big" onclick="userRegister()">注册</button>
+      <p class="user-switch" onclick="showLoginForm()">已有账号？点此登录</p>
     </div>
     
     <!-- 网络诊断提示 -->
     <div id="networkHelp" class="network-help" style="display:none;">
       <p class="network-help-title">⚠️ 网络连接问题</p>
-      <p class="network-help-text">奴才无法连接到格格的宫殿服务器</p>
+      <p class="network-help-text">无法连接到服务器</p>
       <div class="network-help-steps">
         <p>请按以下步骤检查：</p>
         <p>1️⃣ 确认手机和电脑在<b>同一个WiFi</b>下</p>
@@ -78,9 +80,24 @@
 
 <!-- 叩拜排行榜（登录后显示） -->
 <div id="userInfoBar" class="user-info-bar" style="display:none;">
-  <div class="rank-title">🙇 叩拜榜</div>
-  <div class="rank-list" id="rankList"></div>
+  <div class="rank-header" onclick="toggleRankList()" style="cursor:pointer;user-select:none;">
+    <div class="rank-title">🙇 叩拜榜</div>
+    <div class="rank-toggle" id="rankToggleIcon">▼</div>
+  </div>
+  <div class="rank-list-wrapper" id="rankListWrapper">
+    <div class="rank-list" id="rankList"></div>
+  </div>
   <div class="rank-user-info" id="rankUserInfo"></div>
+  <div class="rank-divider"></div>
+  <div class="servant-status-panel" id="servantStatusPanel">
+    <div class="servant-status-title">⚡ 用户状态</div>
+    <div class="servant-rank" id="servantRankDisplay">初入门槛</div>
+    <div class="servant-progress-text" id="servantProgressText">距离下一阶还需 100 金币</div>
+    <div class="servant-progress-bar">
+      <div class="servant-progress-fill" id="servantProgressFill"></div>
+    </div>
+    <div class="servant-tip">💡 上贡越多，等级越高</div>
+  </div>
 </div>
 
 <!-- 管理员登录弹窗 -->
@@ -106,6 +123,8 @@
     <span class="modal-close" onclick="closeRecharge()">&times;</span>
     <h2 class="modal-title">💰 充金币 · 为格格奉献</h2>
     <p class="recharge-hint">1元 = 10金币 · 奴才当以血汗奉上</p>
+    <p class="recharge-hint" style="color:#FF4500;font-weight:bold;">⚠ 金币即诚意，诚意即奴才之性命</p>
+    <p class="recharge-hint" style="color:#B8860B;font-size:12px;">💡 上贡越多，等级越高，越能受格格亲训</p>
     <div class="recharge-options">
       <div class="recharge-card" data-amount="10" onclick="selectRecharge(10, this)">
         <div class="recoin-count">10</div>
@@ -175,6 +194,8 @@
     </button>
     <button class="btn-cancel" onclick="closeRecharge()" style="width:100%;margin-top:8px;">取消</button>
     <p class="recharge-notice">※ 奴才挣钱就是为了奉献给格格，这是应该的</p>
+    <p class="recharge-notice" style="color:#FF4500;font-weight:bold;">※ 你存的不是钱，是觐见格格的资格</p>
+    <p class="recharge-notice" style="color:#B8860B;">※ 不舍得出钱的奴才，不配受格格训诫</p>
   </div>
 </div>
 
@@ -605,8 +626,9 @@
       <span class="gold-icon">🪙</span>
       <span class="gold-amount" id="goldAmount">0</span>
       <span class="gold-text">金币</span>
-      <span class="gold-add">+ 奉献</span>
+      <span class="gold-add">+ 上贡</span>
     </div>
+    <div style="text-align:center;font-size:10px;color:#B8860B;margin-top:2px;">💧 金币即奴才之诚意</div>
   </div>
   
   <!-- 龙椅+格格 -->
@@ -618,8 +640,7 @@
           <div class="gege-mobile-tabs" id="gegeMobileTabs">
             <button class="gege-mobile-tab active" onclick="switchMobileWall(1)">瓜尔佳</button>
             <button class="gege-mobile-tab" onclick="switchMobileWall(2)">璇格格</button>
-            <button class="gege-mobile-tab" onclick="switchMobileWall(3)">凌霜</button>
-            <button class="gege-mobile-tab" onclick="switchMobileWall(4)">古萌</button>
+            <button class="gege-mobile-tab" onclick="switchMobileWall(3)">古萌</button>
           </div>
           <!-- 格格2：爱新觉罗璇格格（左） -->
           <div class="gege-single-wall" id="gegeWall2">
@@ -667,10 +688,10 @@
             <input type="file" id="gege1Input" accept="image/*" multiple max="50" style="display:none">
           </div>
           
-          <!-- 格格3：爱新觉罗凌霜格格（右） -->
+          <!-- 格格3：镶黄旗古萌格格 -->
           <div class="gege-single-wall" id="gegeWall3">
             <div class="photo-wall-header">
-              <span class="photo-wall-title">👑 爱新觉罗凌霜格格</span>
+              <span class="photo-wall-title">👑 镶黄旗古萌格格</span>
               <button class="photo-wall-upload" onclick="uploadGegePhotos(3)" title="上传照片">📤</button>
             </div>
             <div class="photo-wall-grid">
@@ -682,35 +703,12 @@
               </div>
             </div>
             <div class="gege-gold-rank">
-              <span>🪙 凌霜格格累计金币：<b id="gege3Gold">0</b></span>
+              <span>🪙 古萌格格累计金币：<b id="gege3Gold">0</b></span>
             </div>
             <button class="tribute-target-btn" id="tributeBtn3" onclick="selectTributeGege(3, this)">
-              <span>💎</span> 给凌霜格格上贡
-            </button>
-            <input type="file" id="gege3Input" accept="image/*" multiple max="50" style="display:none">
-          </div>
-          
-          <!-- 格格4：镶黄旗古萌格格 -->
-          <div class="gege-single-wall" id="gegeWall4">
-            <div class="photo-wall-header">
-              <span class="photo-wall-title">👑 镶黄旗古萌格格</span>
-              <button class="photo-wall-upload" onclick="uploadGegePhotos(4)" title="上传照片">📤</button>
-            </div>
-            <div class="photo-wall-grid">
-              <div class="photo-wall-slot photo-scroll-animation" data-slot="1" id="gege4Slot1">
-                <div class="photo-placeholder"><span class="photo-icon">📸</span><span>圣容</span></div>
-              </div>
-              <div class="photo-wall-slot photo-scroll-animation" data-slot="2" id="gege4Slot2">
-                <div class="photo-placeholder"><span class="photo-icon">📸</span><span>圣容</span></div>
-              </div>
-            </div>
-            <div class="gege-gold-rank">
-              <span>🪙 古萌格格累计金币：<b id="gege4Gold">0</b></span>
-            </div>
-            <button class="tribute-target-btn" id="tributeBtn4" onclick="selectTributeGege(4, this)">
               <span>💎</span> 给古萌格格上贡
             </button>
-            <input type="file" id="gege4Input" accept="image/*" multiple max="50" style="display:none">
+            <input type="file" id="gege3Input" accept="image/*" multiple max="50" style="display:none">
           </div>
         </div>
       </div>
@@ -813,7 +811,7 @@
           <span>👑</span> 爱新觉罗璇格格
         </button>
         <button class="gege-selector-btn" onclick="selectTributeGege(3, this)">
-          <span>👑</span> 爱新觉罗凌霜格格
+          <span>👑</span> 镶黄旗古萌格格
         </button>
       </div>
     </div>
@@ -831,10 +829,13 @@
         <div class="training-decor" style="font-size:20px;color:#FF4500;text-shadow:0 0 20px rgba(255,69,0,0.8);">━━━━━━━━━ 🔥 必看 🔥 ━━━━━━━━━</div>
       </div>
       <div class="training-desc">
-        <p>⚡ 奴才欲受教化，需献上孝敬 ⚡</p>
-        <p>⚡ 奉献越多，越能得格格亲训 ⚡</p>
+        <p class="training-big-text">⚡ 奴才欲受教化，需献上孝敬 ⚡</p>
+        <p class="training-big-text">⚡ 奉献越多，越能得格格亲训 ⚡</p>
+        <p class="training-big-text">⚡ 金币即奴才之诚意，诚意即奴才之性命 ⚡</p>
         <p class="training-warning">⚠⚠⚠ 等级越高，训诫越深刻，奴才越下贱 ⚠⚠⚠</p>
         <p style="color:#FF4500;font-weight:bold;font-size:15px;">🔥 点击下方等级卡片即可解锁训诫内容 🔥</p>
+        <p style="color:#B8860B;font-size:12px;margin-top:8px;">💡 奴才切记：你存的不是金币，是觐见格格的资格</p>
+        <p style="color:#B8860B;font-size:12px;">💡 金币越多，你在奴才中的等级越高，越能得格格正眼</p>
       </div>
       <div class="training-tiers">
         <div class="tier-card" data-tier="1" data-cost="100" onclick="unlockTier(1)">
@@ -1022,8 +1023,7 @@
       <div class="gege-upload-tabs">
         <button class="gege-tab active" onclick="switchGegeTab(1, this)">瓜尔佳格格</button>
         <button class="gege-tab" onclick="switchGegeTab(2, this)">爱新觉罗璇格格</button>
-        <button class="gege-tab" onclick="switchGegeTab(3, this)">爱新觉罗凌霜格格</button>
-        <button class="gege-tab" onclick="switchGegeTab(4, this)">镶黄旗古萌格格</button>
+        <button class="gege-tab" onclick="switchGegeTab(3, this)">镶黄旗古萌格格</button>
       </div>
       <div class="upload-area" id="gegeUploadArea" onclick="uploadGegePhotos(currentGegeTab)">
         <div class="upload-preview" id="gegeUploadPreview">
@@ -1046,23 +1046,23 @@
       <button class="btn-cancel" onclick="clearGegePhotos(currentGegeTab)" style="width:100%;margin-top:8px;">🗑 清空当前格格圣容</button>
     </div>
     
-    <!-- 奴才金币管理（大面板） -->
+    <!-- 用户金币管理（大面板） -->
     <div class="setting-section" style="border:2px solid #FFD700;background:linear-gradient(180deg,rgba(139,0,0,0.15),rgba(0,0,0,0.3));border-radius:12px;padding:15px;">
-      <h3 style="color:#FFD700;font-size:18px;margin:0 0 10px 0;text-align:center;border-bottom:2px solid #8B4513;padding-bottom:8px;">🪙 奴才管理 · 金币赏赐</h3>
+      <h3 style="color:#FFD700;font-size:18px;margin:0 0 10px 0;text-align:center;border-bottom:2px solid #8B4513;padding-bottom:8px;">🪙 用户管理 · 金币赏赐</h3>
       
       <div style="display:flex;gap:8px;margin-bottom:10px;">
-        <input type="text" id="goldSearchInput" placeholder="搜索奴才名..." style="flex:1;padding:10px;background:rgba(0,0,0,0.6);border:2px solid #DAA520;border-radius:8px;color:#FFD700;font-size:16px;min-width:0;" oninput="searchGoldUsers()">
+        <input type="text" id="goldSearchInput" placeholder="搜索用户名..." style="flex:1;padding:10px;background:rgba(0,0,0,0.6);border:2px solid #DAA520;border-radius:8px;color:#FFD700;font-size:16px;min-width:0;" oninput="searchGoldUsers()">
         <button class="save-btn big" onclick="searchGoldUsers()" style="padding:10px 18px;font-size:16px;">🔍 搜索</button>
       </div>
       
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <span style="color:#DAA520;font-size:14px;">📋 奴才名单</span>
+        <span style="color:#DAA520;font-size:14px;">📋 用户名单</span>
         <button class="btn-small" onclick="searchGoldUsers()" style="font-size:12px;padding:4px 10px;">🔄 刷新全部</button>
       </div>
       
       <div id="goldSearchResults" style="max-height:250px;overflow-y:auto;border:1px solid #8B4513;border-radius:8px;background:rgba(0,0,0,0.3);padding:6px;"></div>
       
-      <!-- 选中奴才详情 -->
+      <!-- 选中用户详情 -->
       <div id="goldManageDetail" class="hidden" style="margin-top:12px;padding:12px;background:linear-gradient(135deg,rgba(139,0,0,0.25),rgba(0,0,0,0.4));border:2px solid #FFD700;border-radius:10px;">
         <h4 id="goldDetailName" style="color:#FFD700;margin:0 0 10px 0;font-size:16px;text-align:center;">👤 -</h4>
         <div style="display:flex;gap:12px;margin-bottom:10px;font-size:14px;color:#FFD700;flex-wrap:wrap;justify-content:center;">
@@ -1185,8 +1185,8 @@
 <!-- 返回顶部按钮 -->
 <a href="javascript:void(0)" class="back-top-btn" id="backTopBtn" onclick="scrollToTop()">⬆ 顶部</a>
 
-<script src="archive_data.js?v=20260810k"></script>
-<script src="training_data.js?v=20260810k"></script>
-<script src="app.js?v=20260815e"></script>
+<script src="archive_data.js?v=20260818a"></script>
+<script src="training_data.js?v=20260818a"></script>
+<script src="app.js?v=20260818a"></script>
 </body>
 </html>

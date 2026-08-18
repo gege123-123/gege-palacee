@@ -2897,52 +2897,25 @@ async function searchGoldUsers() {
     
     try {
       var url = '/api/admin/users/search?q=' + encodeURIComponent(q) + '&adminKey=gege123';
+      console.log('[金币搜索] 请求URL:', API_BASE + url);
+      var result = await apiRequest(url);
+      console.log('[金币搜索] 响应:', result);
       
-      // 添加超时控制
-      var controller = new AbortController();
-      var timeoutId = setTimeout(function() { controller.abort(); }, 10000);
-      
-      var response = await fetch(API_BASE + url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache'
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
+      // 竞态保护：如果有更新的请求，丢弃这个结果
       if (myRequestId !== goldSearchRequestId) return;
       
-      var text = await response.text();
-      var result;
-      try {
-        result = JSON.parse(text);
-      } catch(e) {
-        throw new Error('服务器响应格式错误');
-      }
-      
-      if (result.success && result.users) {
+      if (result && result.success && result.users) {
         goldSearchResults = result.users;
         renderGoldSearchResults();
       } else {
-        resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:20px;font-size:14px;">⚠️ ' + (result.message || '加载失败') + '</div>';
+        var errMsg = (result && result.message) ? result.message : '加载失败';
+        console.error('[金币搜索] 失败:', errMsg);
+        resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:20px;font-size:14px;">⚠️ ' + errMsg + '<br><br><button onclick="searchGoldUsers()" style="padding:8px 20px;background:#8B0000;color:#FFD700;border:2px solid #FFD700;border-radius:6px;cursor:pointer;font-size:14px;">🔄 重新加载</button></div>';
       }
     } catch(e) {
+      console.error('[金币搜索] 异常:', e);
       if (myRequestId !== goldSearchRequestId) return;
-      
-      var errorMsg = '加载出错，请重试';
-      if (e.name === 'AbortError') {
-        errorMsg = '⏱️ 网络超时，请检查网络后重试';
-      } else if (e.message && e.message.includes('Failed to fetch')) {
-        errorMsg = '📡 网络连接失败，请检查网络';
-      }
-      
-      resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:20px;font-size:14px;">' +
-        errorMsg + '<br><br>' +
-        '<button onclick="searchGoldUsers()" style="padding:8px 20px;background:#8B0000;color:#FFD700;border:2px solid #FFD700;border-radius:6px;cursor:pointer;font-size:14px;">🔄 重新加载</button>' +
-        '</div>';
+      resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:20px;font-size:14px;">📡 网络错误: ' + (e.message || '未知错误') + '<br><br><button onclick="searchGoldUsers()" style="padding:8px 20px;background:#8B0000;color:#FFD700;border:2px solid #FFD700;border-radius:6px;cursor:pointer;font-size:14px;">🔄 重新加载</button></div>';
     }
   }, 300);
 }

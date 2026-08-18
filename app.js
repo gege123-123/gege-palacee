@@ -2920,6 +2920,28 @@ async function searchGoldUsers() {
   }, 300);
 }
 
+// 格式化日期：兼容数字时间戳和字符串日期
+function formatCreatedDate(createdAt) {
+  if (!createdAt) return '未知';
+  try {
+    var date;
+    if (typeof createdAt === 'number') {
+      date = new Date(createdAt);
+    } else {
+      date = new Date(createdAt);
+    }
+    if (isNaN(date.getTime())) {
+      return String(createdAt).substring(0, 10);
+    }
+    var y = date.getFullYear();
+    var m = String(date.getMonth() + 1).padStart(2, '0');
+    var d = String(date.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
+  } catch(e) {
+    return String(createdAt || '').substring(0, 10) || '未知';
+  }
+}
+
 function renderGoldSearchResults() {
   var resultsEl = document.getElementById('goldSearchResults');
   if (!resultsEl) return;
@@ -2942,7 +2964,7 @@ function renderGoldSearchResults() {
       '<div style="display:flex;gap:12px;font-size:12px;color:#B8860B;margin-top:4px;">' +
         '<span>💎 奉献:' + (u.totalTributed || 0) + '</span>' +
         '<span>🙇 叩拜:' + (u.kneelCount || 0) + '</span>' +
-        '<span>📅 ' + ((u.createdAt || '').substring(0, 10)) + '</span>' +
+        '<span>📅 ' + formatCreatedDate(u.createdAt) + '</span>' +
       '</div>' +
     '</div>';
   }

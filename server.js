@@ -44,6 +44,16 @@ app.use(cors({
   credentials: false
 }));
 
+// ============ 强制清除浏览器缓存的重定向 ============
+// 访问 /new 或 /v2 时重定向到首页并附带唯一参数，强制浏览器加载最新内容
+app.get(['/new', '/v2', '/v3', '/latest'], function(req, res) {
+  var stamp = Date.now();
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.redirect(302, '/?t=' + stamp);
+});
+
 // 确保正确处理JSON请求
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));

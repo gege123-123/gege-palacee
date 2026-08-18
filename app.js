@@ -607,6 +607,8 @@ function checkUserLogin() {
   var username = localStorage.getItem('gege_user_name');
   var servantName = localStorage.getItem('gege_servant_name');
   
+  console.log('[登录检查] token:', token ? '有' : '无', 'username:', username, 'servantName:', servantName);
+  
   if (token) {
     state.userToken = token;
     
@@ -636,10 +638,65 @@ function checkUserLogin() {
     if (state.currentUser) {
       updateUserInfoBar();
       updateGoldDisplay();
+      updateRankDisplay();
     }
     
-    loadGoldFromServer();
+    // 从服务器同步最新数据（延迟1秒确保服务器就绪）
+    setTimeout(function() {
+      loadGoldFromServer().then(function() {
+        console.log('[登录检查] 服务器数据同步成功');
+      }).catch(function(e) {
+        console.warn('[登录检查] 服务器同步失败，使用本地缓存:', e);
+      });
+    }, 1000);
   } else {
+    // 尝试从账户记忆恢复
+    var memory = localStorage.getItem('gege_account_memory');
+    if (memory) {
+      console.log('[登录检查] 尝试从账户记忆恢复...');
+      try {
+        var account = JSON.parse(memory);
+        if (account && account.token) {
+          state.userToken = account.token;
+          state.userName = account.username || '';
+          state.gold = account.gold || 0;
+          state.totalTributed = account.totalTributed || 0;
+          state.kneelCount = account.kneelCount || 0;
+          if (account.username) {
+            state.currentUser = {
+              username: account.username,
+              servantName: account.servantName || account.username || '用户'
+            };
+          }
+          
+          // 恢复localStorage各个字段
+          localStorage.setItem('gege_user_token', account.token);
+          localStorage.setItem('gege_user_name', account.username || '');
+          localStorage.setItem('gege_servant_name', account.servantName || '');
+          localStorage.setItem('gege_local_gold', account.gold.toString());
+          localStorage.setItem('gege_local_kneel', account.kneelCount.toString());
+          localStorage.setItem('gege_local_total_tributed', account.totalTributed.toString());
+          
+          if (state.currentUser) {
+            updateUserInfoBar();
+            updateGoldDisplay();
+            updateRankDisplay();
+          }
+          console.log('[登录检查] 账户记忆恢复成功:', account.username);
+          
+          // 从服务器验证
+          setTimeout(function() {
+            loadGoldFromServer().catch(function() {
+              console.warn('[登录检查] 服务器验证失败，使用本地缓存');
+            });
+          }, 1000);
+          return;
+        }
+      } catch(e) {
+        console.warn('[登录检查] 账户记忆解析失败:', e);
+      }
+    }
+    
     showUserLoginModal();
   }
 }

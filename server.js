@@ -1600,14 +1600,17 @@ app.get('/api/payment/info', (req, res) => {
 
 // ============ 静态文件服务（放在所有API路由之后）============
 app.use(express.static(__dirname, { 
-  maxAge: '1h',
+  maxAge: 0,
+  etag: false,
   setHeaders: function(res, filePath) {
     if (filePath.match(/\.(mp3|mp4|wav|ogg|m4a|flac)$/)) {
       res.setHeader('Accept-Ranges', 'bytes');
     }
-    // 不缓存HTML和JS/CSS文件（确保用户获取最新版本）
+    // HTML/JS/CSS完全不缓存（确保用户每次获取最新版本）
     if (filePath.match(/\.(html|js|css)$/)) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
     }
   }
 }));

@@ -127,16 +127,47 @@ function migrateOldData() {
 migrateOldData();
 
 function loadUsers() {
+  // 1. 优先从持久化目录加载
   try {
     if (fs.existsSync(USERS_FILE)) {
       let content = fs.readFileSync(USERS_FILE, 'utf8');
-      // 移除 BOM 头
       if (content.charCodeAt(0) === 0xFEFF) {
         content = content.substring(1);
       }
-      return JSON.parse(content);
+      const users = JSON.parse(content);
+      const count = Object.keys(users).length;
+      console.log(`[存储] 从持久化目录加载 ${count} 个用户`);
+      return users;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[存储] 从持久化目录加载失败:', e.message);
+  }
+
+  // 2. Fallback: 从代码目录的 data/users.json 加载（随仓库部署的初始数据）
+  const codeDirUsers = path.join(__dirname, 'data', 'users.json');
+  try {
+    if (fs.existsSync(codeDirUsers)) {
+      let content = fs.readFileSync(codeDirUsers, 'utf8');
+      if (content.charCodeAt(0) === 0xFEFF) {
+        content = content.substring(1);
+      }
+      const users = JSON.parse(content);
+      const count = Object.keys(users).length;
+      console.log(`[存储] 从代码目录加载 ${count} 个用户（初始数据）`);
+      // 复制到持久化目录，避免下次再从代码目录加载
+      try {
+        saveUsers(users);
+        console.log('[存储] 初始数据已复制到持久化目录');
+      } catch (e) {
+        console.warn('[存储] 复制初始数据失败:', e.message);
+      }
+      return users;
+    }
+  } catch (e) {
+    console.warn('[存储] 从代码目录加载失败:', e.message);
+  }
+
+  console.log('[存储] 无用户数据，从空开始');
   return {};
 }
 

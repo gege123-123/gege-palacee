@@ -229,7 +229,7 @@ html, body {
   background: linear-gradient(135deg, var(--dark-gold), #5a4010);
   border: 2px solid var(--gold); border-radius: 25px;
   color: var(--bright-gold); font-size: 14px; font-weight: bold;
-  cursor: pointer; z-index: 100;
+  cursor: pointer; z-index: 1500;
   box-shadow: 0 3px 15px rgba(255,215,0,0.3);
   transition: all 0.3s;
   animation: adminGlow 2s ease-in-out infinite;

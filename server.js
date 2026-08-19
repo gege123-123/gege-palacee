@@ -489,13 +489,12 @@ function xunhupaySign(params, appSecret) {
  */
 async function createMPayOrder(order) {
   try {
-    const provider = config.payProvider || 'xunhupay';
-    // 兼容旧调用：若配置仍是码支付端点，则按码支付逻辑处理
-    if (provider === 'epay' || (config.mpayEndpoint || '').indexOf('mapay') >= 0) {
-      return await createEPayOrder(order);
-    }
+    // 创建订单前强制修复配置（防止Railway环境变量残留旧值）
+    config = fixLegacyConfig(config);
 
-    const endpoint = config.mpayEndpoint || 'https://api.xunhupay.com/payment/do.html';
+    const provider = config.payProvider || 'xunhupay';
+    // 强制使用虎皮椒端点（忽略任何旧的码支付端点）
+    const endpoint = 'https://api.xunhupay.com/payment/do.html';
     const appId = config.apiKey;        // 虎皮椒 appid
     const appSecret = config.apiSecret; // 虎皮椒 app_secret
 
@@ -996,6 +995,8 @@ function markOrderAsPaid(orderNo, payData, source) {
 
 // 获取当前配置（隐藏敏感信息）
 app.get('/api/config', (req, res) => {
+  // 每次返回配置前，强制修复为虎皮椒配置（防止Railway环境变量残留旧值）
+  config = fixLegacyConfig(config);
   res.json({
     paymentMethod: config.paymentMethod,
     apiKey: config.apiKey ? '***已设置***' : '',
@@ -1005,8 +1006,8 @@ app.get('/api/config', (req, res) => {
     autoVerify: config.autoVerify,
     notifyUrl: config.notifyUrl,
     payProvider: config.payProvider || 'xunhupay',
-    mpayEndpoint: config.mpayEndpoint || 'https://api.xunhupay.com/payment/do.html',
-    mpayType: config.mpayType || 'wxpay',
+    mpayEndpoint: config.mpayEndpoint,
+    mpayType: config.mpayType,
     testMode: config.testMode || false,
     paymentModes: [
       { value: 'qrcode', label: '收款码模式（手动）' },

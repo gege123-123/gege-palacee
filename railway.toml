@@ -1,2 +1,8 @@
 [env]
 NODE_ENV = "production"
+MPAY_API_KEY = "201906186425"
+MPAY_API_SECRET = "8173df15307b65e6f47fb9d359bcb868"
+PAY_PROVIDER = "xunhupay"
+MPAY_ENDPOINT = "https://api.xunhupay.com/payment/do.html"
+MPAY_TYPE = "wxpay"
+PUBLIC_URL = "https://gege-palacee-production.up.railway.app"

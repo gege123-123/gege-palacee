@@ -2008,7 +2008,7 @@ html, body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 999;
+  z-index: 1500;
   box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
   transition: transform 0.3s, box-shadow 0.3s;
   border: 2px solid #8B4513;

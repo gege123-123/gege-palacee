@@ -278,6 +278,12 @@ function loadConfig() {
     }
   } catch (e) {}
   // 环境变量优先（云部署模式）
+  // 强制检查：如果环境变量 MPAY_ENDPOINT 仍是旧的码支付端点(mapay.cc)，则覆盖为虎皮椒端点
+  let finalEndpoint = process.env.MPAY_ENDPOINT || 'https://api.xunhupay.com/payment/do.html';
+  if (finalEndpoint.indexOf('mapay') >= 0) {
+    console.log('[支付] 检测到旧端点(mapay.cc)，自动切换为虎皮椒端点');
+    finalEndpoint = 'https://api.xunhupay.com/payment/do.html';
+  }
   return {
     paymentMethod: process.env.PAYMENT_METHOD || 'api',
     apiKey: process.env.MPAY_API_KEY || DEFAULT_XUNHUPAY_APPID,          // 虎皮椒 app_id
@@ -287,7 +293,7 @@ function loadConfig() {
     autoVerify: true,
     notifyUrl: (process.env.PUBLIC_URL || DEFAULT_PUBLIC_URL) + '/api/payment/notify',
     payProvider: process.env.PAY_PROVIDER || 'xunhupay',                       // xunhupay=虎皮椒, epay=码支付
-    mpayEndpoint: process.env.MPAY_ENDPOINT || 'https://api.xunhupay.com/payment/do.html',
+    mpayEndpoint: finalEndpoint,
     mpayType: process.env.MPAY_TYPE || 'wxpay',     // wxpay=微信, alipay=支付宝
     testMode: false
   };

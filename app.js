@@ -1136,6 +1136,7 @@ async function generateRechargeQR() {
         } else {
           // 网页链接：同时显示二维码和跳转按钮
           var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+          var isWeixin = /MicroMessenger/i.test(navigator.userAgent);
           var payLink = result.qrUrl || result.payUrl || result.redirectUrl || '';
           
           if (rechargePayQr) {
@@ -1146,15 +1147,45 @@ async function generateRechargeQR() {
               html += '<img src="' + result.qrCode + '" alt="付款二维码" style="max-width:220px;max-height:220px;border-radius:12px;border:3px solid #FFD700;display:block;margin:0 auto;">';
             }
             
-            // 显示跳转按钮
+            // 显示跳转按钮 - 使用onclick事件而非<a target="_blank">，解决微信浏览器拦截问题
+            var btnId = 'payJumpBtn_' + Date.now();
             if (isMobile) {
-              html += '<div style="margin-top:15px;"><a href="' + payLink + '" target="_blank" class="pay-redirect-btn" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:25px;text-decoration:none;font-weight:bold;font-size:16px;">📱 点击前往' + payTypeName + '支付 ¥' + price + '</a></div>';
+              if (isWeixin) {
+                // 微信浏览器内：提示用户点击右上角"..."在浏览器中打开
+                html += '<div style="margin-top:15px;text-align:center;">';
+                html += '<div id="' + btnId + '" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:25px;font-weight:bold;font-size:16px;cursor:pointer;">📱 点击前往' + payTypeName + '支付 ¥' + price + '</div>';
+                html += '<p style="margin-top:10px;font-size:12px;color:#e74c3c;">⚠ 若点击无反应，请点击右上角"···"选择"在浏览器打开"</p>';
+                html += '</div>';
+              } else {
+                // 非微信移动浏览器：直接location.href跳转
+                html += '<div style="margin-top:15px;text-align:center;">';
+                html += '<div id="' + btnId + '" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:25px;font-weight:bold;font-size:16px;cursor:pointer;">📱 点击前往' + payTypeName + '支付 ¥' + price + '</div>';
+                html += '</div>';
+              }
             } else {
               html += '<p style="text-align:center;margin-top:10px;font-size:12px;color:#888;">💡 扫码支付或点击下方按钮跳转</p>';
-              html += '<div style="margin-top:10px;"><a href="' + payLink + '" target="_blank" id="payRedirectBtn" style="display:inline-block;padding:10px 20px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:20px;text-decoration:none;font-weight:bold;">🔗 前往' + payTypeName + '支付 ¥' + price + '</a></div>';
+              html += '<div style="margin-top:10px;text-align:center;">';
+              html += '<div id="' + btnId + '" style="display:inline-block;padding:10px 20px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:20px;font-weight:bold;cursor:pointer;">🔗 前往' + payTypeName + '支付 ¥' + price + '</div>';
+              html += '</div>';
             }
             
             rechargePayQr.innerHTML = html;
+            
+            // 绑定点击事件 - 使用location.href跳转，避免target="_blank"被拦截
+            var payBtn = document.getElementById(btnId);
+            if (payBtn) {
+              payBtn.onclick = function() {
+                console.log('点击支付跳转按钮，链接:', payLink);
+                // 微信浏览器中target=_blank会被拦截，使用location.href直接跳转
+                try {
+                  window.location.href = payLink;
+                } catch(e) {
+                  console.error('跳转失败:', e);
+                  // 降级：尝试window.open
+                  window.open(payLink, '_blank');
+                }
+              };
+            }
           }
           
           if (rechargePayInfo) {

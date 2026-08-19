@@ -446,53 +446,47 @@ async function createMPayOrder(order) {
     }
 
     const endpoint = config.mpayEndpoint || 'https://api.xunhupay.com/payment/do.html';
-    const appId = config.apiKey;        // 虎皮椒 app_id
+    const appId = config.apiKey;        // 虎皮椒 appid
     const appSecret = config.apiSecret; // 虎皮椒 app_secret
 
     if (!appId || !appSecret) {
-      console.log('虎皮椒 app_id/app_secret 未设置，使用本地模式');
+      console.log('虎皮椒 appid/app_secret 未设置，使用本地模式');
       return null;
     }
 
     const notifyUrl = config.notifyUrl || `http://localhost:${PORT}/api/payment/notify`;
     const returnUrl = config.notifyUrl || `http://localhost:${PORT}/api/payment/notify`;
 
-    // 当前时间 Y-m-d H:i:s
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-
+    // 虎皮椒API参数（严格按照官方文档：https://www.xunhupay.com/doc/api/pay.html）
     const params = {
       version: '1.1',
-      app_id: appId,
-      trade_type: config.mpayType || 'wxpay',  // wxpay=微信, alipay=支付宝
-      out_trade_no: order.orderNo,
+      appid: appId,                          // 注意：是appid，不是app_id
+      trade_order_id: order.orderNo,          // 注意：是trade_order_id，不是out_trade_no
       total_fee: order.amount.toFixed(2),
       title: order.description || '格格的宫殿-金币充值',
+      time: Math.floor(Date.now() / 1000),    // Unix时间戳（秒），不是格式化日期
       notify_url: notifyUrl,
       return_url: returnUrl,
-      time: timeStr,
       nonce_str: crypto.randomBytes(8).toString('hex')
     };
     params.hash = xunhupaySign(params, appSecret);
 
     console.log('📱 调用虎皮椒API');
-    console.log('  app_id:', appId);
+    console.log('  appid:', appId);
     console.log('  金额:', params.total_fee, '元');
-    console.log('  订单号:', params.out_trade_no);
-    console.log('  支付方式:', params.trade_type);
+    console.log('  订单号:', params.trade_order_id);
+    console.log('  时间戳:', params.time);
 
-    const queryString = Object.keys(params)
-      .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
-      .join('&');
+    // 虎皮椒官方文档要求使用POST JSON方式传参
+    const postBody = JSON.stringify(params);
 
     const response = await httpRequest(endpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Content-Length': Buffer.byteLength(queryString)
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postBody)
       },
-      body: queryString
+      body: postBody
     });
 
     if (!response) {
@@ -515,25 +509,30 @@ async function createMPayOrder(order) {
 
     console.log('虎皮椒API响应:', JSON.stringify(jsonResp).substring(0, 400));
 
-    // 虎皮椒返回：code=0 成功，其他失败
-    if (jsonResp.code === 0 || jsonResp.code === '0') {
-      const data = jsonResp.data || {};
-      const payUrl = data.url || '';            // H5支付链接
-      const qrImageUrl = data.images || '';     // 二维码图片URL（直接可显示）
-      const apiOrderNo = data.order_no || '';   // 虎皮椒订单号
-
-      return {
-        qrCode: qrImageUrl,
-        qrUrl: payUrl,
-        payUrl: payUrl,
-        orderNo: apiOrderNo || order.orderNo,
-        amount: order.amount.toFixed(2),
-        rawData: jsonResp
-      };
-    } else {
-      console.error('虎皮椒返回错误:', jsonResp.msg || jsonResp.errmsg || '未知错误');
+    // 虎皮椒返回：有url字段或url_qrcode字段表示成功，errcode存在表示失败
+    if (jsonResp.errcode) {
+      console.error('虎皮椒返回错误:', jsonResp.errcode, jsonResp.errmsg || '未知错误');
       return null;
     }
+
+    // 成功响应包含：openid(订单id), url(跳转链接), url_qrcode(二维码地址)
+    const payUrl = jsonResp.url || '';           // H5支付跳转链接
+    const qrImageUrl = jsonResp.url_qrcode || ''; // 二维码图片URL（PC端扫码用）
+    const apiOrderNo = jsonResp.openid || '';     // 虎皮椒订单id
+
+    if (!payUrl && !qrImageUrl) {
+      console.error('虎皮椒返回无支付链接:', JSON.stringify(jsonResp));
+      return null;
+    }
+
+    return {
+      qrCode: qrImageUrl,
+      qrUrl: payUrl,
+      payUrl: payUrl,
+      orderNo: apiOrderNo || order.orderNo,
+      amount: order.amount.toFixed(2),
+      rawData: jsonResp
+    };
   } catch (error) {
     console.error('调用虎皮椒API失败:', error.message);
     return null;

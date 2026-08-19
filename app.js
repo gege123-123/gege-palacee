@@ -3146,7 +3146,8 @@ var paymentConfig = {
   apiSecret: '',
   notifyUrl: '',
   autoVerify: false,
-  mpayEndpoint: 'https://api.mpays.cn'
+  payProvider: 'xunhupay',
+  mpayEndpoint: 'https://api.xunhupay.com/payment/do.html'
 };
 
 function selectPaymentMethod(method, element) {
@@ -3199,7 +3200,7 @@ function loadPaymentConfig() {
       var apiSecretInput = document.getElementById('apiSecretInput');
       var notifyUrlInput = document.getElementById('notifyUrlInput');
       
-      if (mpayEndpointInput && config.mpayEndpoint) mpayEndpointInput.value = config.mpayEndpoint;
+      if (mpayEndpointInput && config.mpayEndpoint) mpayEndpointInput.value = config.mpayEndpoint || 'https://api.xunhupay.com/payment/do.html';
       if (apiKeyInput && config.apiKey) apiKeyInput.value = config.apiKey;
       if (apiSecretInput && config.apiSecret) apiSecretInput.value = config.apiSecret;
       if (notifyUrlInput && config.notifyUrl) notifyUrlInput.value = config.notifyUrl;
@@ -3222,6 +3223,7 @@ async function syncPaymentConfigToServer() {
         apiSecret: paymentConfig.apiSecret,
         notifyUrl: paymentConfig.notifyUrl,
         autoVerify: paymentConfig.autoVerify,
+        payProvider: paymentConfig.payProvider || 'xunhupay',
         mpayEndpoint: paymentConfig.mpayEndpoint
       }
     });
@@ -4324,7 +4326,7 @@ function initPaymentConfigUI() {
       }
       
       var endpointEl = document.getElementById('mpayEndpoint');
-      if (endpointEl) endpointEl.value = config.mpayEndpoint || 'https://api.mpays.cn';
+      if (endpointEl) endpointEl.value = config.mpayEndpoint || 'https://api.xunhupay.com/payment/do.html';
       
       var notifyEl = document.getElementById('notifyUrl');
       if (notifyEl) notifyEl.value = config.notifyUrl || '';
@@ -4394,11 +4396,13 @@ function onPaymentMethodChange() {
         '<p>3. 用于测试完整的充值流程</p>' +
         '<p class="tip-warn">⚠️ 测试模式下不是真实支付</p>';
     } else if (apiMode) {
-      tipsEl.innerHTML = '<p class="tip-title">📖 自动充值说明：</p>' +
-        '<p>1. 去码支付/BufPay平台注册账号，获取API Key和Secret</p>' +
-        '<p>2. 配置回调地址（需公网访问）</p>' +
-        '<p>3. 奴才扫码支付后，金币自动到账，无需手动确认</p>' +
-        '<p class="tip-warn">⚠️ 生产环境建议部署到云服务器（Render/Railway）</p>';
+      tipsEl.innerHTML = '<p class="tip-title">📖 自动充值说明（虎皮椒支付）：</p>' +
+        '<p>1. 访问虎皮椒官网 xunhupay.com 注册账号（约2%费率，不被风控）</p>' +
+        '<p>2. 在虎皮椒后台创建应用，获取 app_id 和 app_secret</p>' +
+        '<p>3. 将 app_id 填入 API Key，app_secret 填入 API Secret</p>' +
+        '<p>4. 回调地址必须为公网可访问（Railway默认已配置）</p>' +
+        '<p>5. 奴才扫码支付后，金币自动到账，无需手动确认</p>' +
+        '<p class="tip-warn">⚠️ 原码支付(mzf.mapay.cc)已被微信风控，请勿使用</p>';
     } else {
       tipsEl.innerHTML = '<p class="tip-title">📖 收款码模式说明：</p>' +
         '<p>1. 上传格格的微信/支付宝收款码</p>' +
@@ -4423,7 +4427,8 @@ async function savePaymentConfig() {
     testMode: method === 'test',
     apiKey: apiKeyEl ? apiKeyEl.value.trim() : '',
     apiSecret: apiSecretEl ? apiSecretEl.value.trim() : '',
-    mpayEndpoint: endpointEl ? endpointEl.value.trim() : 'https://api.mpays.cn',
+    payProvider: 'xunhupay',
+    mpayEndpoint: endpointEl ? endpointEl.value.trim() : 'https://api.xunhupay.com/payment/do.html',
     notifyUrl: notifyEl ? notifyEl.value.trim() : '',
     autoVerify: autoVerifyEl ? autoVerifyEl.checked : false
   };
@@ -4479,7 +4484,7 @@ function testPaymentConfig() {
 }
 
 function openPaymentDoc() {
-  showToast('📖 获取API Key:\n1. 访问码支付/BufPay官网\n2. 注册并登录\n3. 在"API管理"页面获取Key和Secret', 5000);
+  showToast('📖 获取虎皮椒密钥:\n1. 访问 xunhupay.com 注册账号\n2. 实名认证后创建应用\n3. 在应用详情获取 app_id 和 app_secret\n4. app_id=API Key, app_secret=API Secret', 5000);
 }
 
 // ============ 启动时加载 ============

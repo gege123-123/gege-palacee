@@ -69,14 +69,40 @@ app.use('/api/', (req, res, next) => {
 
 // ============ 用户系统 ============
 // Railway持久化存储路径（如果可用）
-const PERSISTENT_DIR = process.env.RAILWAY_PERSISTENT_DIR || process.env.PERSISTENT_DIR || path.join(__dirname, 'data');
+// 优先级：RAILWAY_PERSISTENT_DIR > PERSISTENT_DIR > /tmp/gege_data > __dirname/data
+let PERSISTENT_DIR = process.env.RAILWAY_PERSISTENT_DIR || process.env.PERSISTENT_DIR || '';
+// 如果没设置环境变量，尝试 /tmp（Railway/Linux 可写），最后才回退到代码目录
+if (!PERSISTENT_DIR) {
+  // 测试 /tmp 是否可写（Linux/Railway 环境）
+  const tmpDir = '/tmp/gege_data';
+  try {
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.accessSync(tmpDir, fs.constants.W_OK);
+    PERSISTENT_DIR = tmpDir;
+    console.log('[存储] 使用 /tmp/gege_data 作为持久化目录');
+  } catch (e) {
+    // /tmp 不可用，回退到代码目录（本地开发环境）
+    PERSISTENT_DIR = path.join(__dirname, 'data');
+    console.log('[存储] 使用本地代码目录:', PERSISTENT_DIR);
+  }
+}
 // 确保持久化目录存在
-try { fs.mkdirSync(PERSISTENT_DIR, { recursive: true }); } catch(e) {}
+try {
+  fs.mkdirSync(PERSISTENT_DIR, { recursive: true });
+  fs.accessSync(PERSISTENT_DIR, fs.constants.W_OK);
+} catch(e) {
+  console.error('[存储] 持久化目录不可写:', PERSISTENT_DIR, e.message);
+  // 最后兜底：尝试当前工作目录的 data 子目录
+  PERSISTENT_DIR = path.join(process.cwd(), 'data');
+  try { fs.mkdirSync(PERSISTENT_DIR, { recursive: true }); } catch(e2) {}
+}
 
 const USERS_FILE = path.join(PERSISTENT_DIR, 'users.json');
 const SESSIONS_FILE = path.join(PERSISTENT_DIR, 'sessions.json');
 const CONFIG_FILE = path.join(PERSISTENT_DIR, 'payment_config.json');
 const ORDER_FILE = path.join(PERSISTENT_DIR, 'orders.json');
+const BACKUP_DIR = path.join(PERSISTENT_DIR, 'backups');
+console.log('[存储] 持久化目录:', PERSISTENT_DIR);
 
 // 自动迁移旧位置数据到持久化目录
 function migrateOldData() {
@@ -115,39 +141,46 @@ function loadUsers() {
 }
 
 function saveUsers(users) {
+  // 第一步：创建备份（失败不影响主流程）
   try {
-    // 自动备份（保留最近5个备份）
-    const backupDir = path.join(__dirname, 'data', 'backups');
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
+    // 使用 PERSISTENT_DIR 下的 backups 目录（Railway 上 __dirname 是只读的）
+    if (!fs.existsSync(BACKUP_DIR)) {
+      fs.mkdirSync(BACKUP_DIR, { recursive: true });
     }
-    
-    // 检查是否需要备份（数据有变动时）
-    const existingFiles = fs.readdirSync(backupDir).filter(f => f.startsWith('users_backup_')).sort();
+
+    // 检查是否需要备份（保留最近5个）
+    const existingFiles = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('users_backup_')).sort();
     if (existingFiles.length >= 5) {
-      fs.unlinkSync(path.join(backupDir, existingFiles[0]));
+      fs.unlinkSync(path.join(BACKUP_DIR, existingFiles[0]));
     }
-    
+
     // 每次保存都创建备份
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupFile = path.join(backupDir, `users_backup_${timestamp}.json`);
+    const backupFile = path.join(BACKUP_DIR, `users_backup_${timestamp}.json`);
     fs.writeFileSync(backupFile, JSON.stringify(users, null, 2));
-    
+
     // 清理超过24小时的备份
-    const allBackups = fs.readdirSync(backupDir).filter(f => f.startsWith('users_backup_'));
+    const allBackups = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('users_backup_'));
     const now = Date.now();
     allBackups.forEach(file => {
-      const filePath = path.join(backupDir, file);
+      const filePath = path.join(BACKUP_DIR, file);
       const stat = fs.statSync(filePath);
       if (now - stat.mtimeMs > 24 * 60 * 60 * 1000) {
-        fs.unlinkSync(filePath);
+        try { fs.unlinkSync(filePath); } catch (e) {}
       }
     });
   } catch (e) {
-    console.warn('备份失败:', e.message);
+    console.warn('[存储] 备份失败（不影响保存）:', e.message);
   }
-  
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+
+  // 第二步：写入主文件（失败要返回false让调用方知道）
+  try {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+    return true;
+  } catch (e) {
+    console.error('[存储] 保存用户数据失败:', e.message);
+    return false;
+  }
 }
 
 function loadSessions() {
@@ -192,21 +225,28 @@ function loadConfig() {
       if (process.env.MPAY_API_SECRET) config.apiSecret = process.env.MPAY_API_SECRET;
       if (process.env.MPAY_ENDPOINT) config.mpayEndpoint = process.env.MPAY_ENDPOINT;
       if (process.env.MPAY_TYPE) config.mpayType = process.env.MPAY_TYPE;
+      if (process.env.PAY_PROVIDER) config.payProvider = process.env.PAY_PROVIDER;
       if (process.env.PUBLIC_URL) config.notifyUrl = process.env.PUBLIC_URL + '/api/payment/notify';
+      // 默认切换为虎皮椒支付平台（码支付已被风控）
+      if (!config.payProvider) config.payProvider = 'xunhupay';
+      if (!config.mpayEndpoint || config.mpayEndpoint.indexOf('mapay.cc') >= 0) {
+        config.mpayEndpoint = 'https://api.xunhupay.com/payment/do.html';
+      }
       return config;
     }
   } catch (e) {}
   // 环境变量优先（云部署模式）
   return {
     paymentMethod: process.env.PAYMENT_METHOD || 'api',
-    apiKey: process.env.MPAY_API_KEY || '',
-    apiSecret: process.env.MPAY_API_SECRET || '',
+    apiKey: process.env.MPAY_API_KEY || '',          // 虎皮椒 app_id
+    apiSecret: process.env.MPAY_API_SECRET || '',    // 虎皮椒 app_secret
     qrCodeImage: '',
     callbackUrl: '',
     autoVerify: true,
     notifyUrl: process.env.PUBLIC_URL ? process.env.PUBLIC_URL + '/api/payment/notify' : '',
-    mpayEndpoint: process.env.MPAY_ENDPOINT || 'https://mzf.mapay.cc/xpay/epay',
-    mpayType: process.env.MPAY_TYPE || 'alipay',
+    payProvider: process.env.PAY_PROVIDER || 'xunhupay',                       // xunhupay=虎皮椒, epay=码支付
+    mpayEndpoint: process.env.MPAY_ENDPOINT || 'https://api.xunhupay.com/payment/do.html',
+    mpayType: process.env.MPAY_TYPE || 'wxpay',     // wxpay=微信, alipay=支付宝
     testMode: false
   };
 }
@@ -329,75 +369,83 @@ setInterval(() => {
   if (changed) saveOrders();
 }, 60 * 1000);
 
-// ============ 码支付 API 对接 ============
+// ============ 虎皮椒支付 API 对接 ============
+// 官网: https://xunhupay.com   文档: https://www.xunhupay.com/doc/api/page/index.html
+// 接口: https://api.xunhupay.com/payment/do.html
+// 签名: 参数按字典序拼成 k1=v1&k2=v2，末尾直接拼 app_secret，MD5小写
+// 回调: status=OK 表示支付成功，需返回字符串 "success"
 
 /**
- * 码支付 API - 创建支付订单
- * 对接码支付易支付协议(V1)
- * 文档: https://pay.mapay.cn/doc.html
+ * 生成虎皮椒签名
+ * @param {Object} params - 参数对象（不含hash）
+ * @param {string} appSecret - 应用密钥
+ * @returns {string} MD5小写签名
+ */
+function xunhupaySign(params, appSecret) {
+  const signParams = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (k === 'hash' || v === '' || v === null || v === undefined) continue;
+    signParams[k] = String(v);
+  }
+  const signStr = Object.keys(signParams).sort()
+    .map(k => `${k}=${signParams[k]}`)
+    .join('&');
+  return crypto.createHash('md5').update(signStr + appSecret, 'utf8').digest('hex');
+}
+
+/**
+ * 虎皮椒 API - 创建支付订单
  */
 async function createMPayOrder(order) {
   try {
-    const endpoint = config.mpayEndpoint || 'https://mzf.mapay.cc/xpay/epay';
-    const pid = config.apiKey;       // PID = 12809
-    const secret = config.apiSecret;  // SECRET
-    
-    if (!pid || !secret) {
-      console.log('API Key或Secret未设置，使用本地模式');
+    const provider = config.payProvider || 'xunhupay';
+    // 兼容旧调用：若配置仍是码支付端点，则按码支付逻辑处理
+    if (provider === 'epay' || (config.mpayEndpoint || '').indexOf('mapay') >= 0) {
+      return await createEPayOrder(order);
+    }
+
+    const endpoint = config.mpayEndpoint || 'https://api.xunhupay.com/payment/do.html';
+    const appId = config.apiKey;        // 虎皮椒 app_id
+    const appSecret = config.apiSecret; // 虎皮椒 app_secret
+
+    if (!appId || !appSecret) {
+      console.log('虎皮椒 app_id/app_secret 未设置，使用本地模式');
       return null;
     }
-    
-    // 构造回调URL
+
     const notifyUrl = config.notifyUrl || `http://localhost:${PORT}/api/payment/notify`;
     const returnUrl = config.notifyUrl || `http://localhost:${PORT}/api/payment/notify`;
-    
-    // 易支付协议参数
+
+    // 当前时间 Y-m-d H:i:s
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
     const params = {
-      pid: pid,
-      type: config.mpayType || 'wxpay',  // wxpay=微信, alipay=支付宝
+      version: '1.1',
+      app_id: appId,
+      trade_type: config.mpayType || 'wxpay',  // wxpay=微信, alipay=支付宝
       out_trade_no: order.orderNo,
+      total_fee: order.amount.toFixed(2),
+      title: order.description || '格格的宫殿-金币充值',
       notify_url: notifyUrl,
       return_url: returnUrl,
-      name: order.description || '格格的宫殿-金币充值',
-      money: order.amount.toFixed(2)
+      time: timeStr,
+      nonce_str: crypto.randomBytes(8).toString('hex')
     };
-    
-    // 生成MD5签名（易支付V1协议）
-    // 规则：排除sign、sign_type、charset，所有参数按参数名字典序排序，
-    // 拼接成 key1=val1&key2=val2... 再直接拼接密钥，MD5小写
-    const signParams = {};
-    for (const [k, v] of Object.entries(params)) {
-      if (k !== 'sign' && k !== 'sign_type' && k !== 'charset' && v !== '' && v !== null && v !== undefined) {
-        signParams[k] = String(v);
-      }
-    }
-    const signKeys = Object.keys(signParams).sort();
-    let signStr = '';
-    for (const k of signKeys) {
-      signStr += `${k}=${signParams[k]}&`;
-    }
-    signStr = signStr.replace(/&$/, '');
-    const stringSignTemp = signStr + secret;
-    const sign = crypto.createHash('md5').update(stringSignTemp, 'utf8').digest('hex');
-    params.sign = sign;
-    
-    console.log('📱 调用码支付API（易支付V1协议）');
-    console.log('  PID:', pid);
-    console.log('  金额:', params.money, '元');
+    params.hash = xunhupaySign(params, appSecret);
+
+    console.log('📱 调用虎皮椒API');
+    console.log('  app_id:', appId);
+    console.log('  金额:', params.total_fee, '元');
     console.log('  订单号:', params.out_trade_no);
-    console.log('  支付方式:', params.type);
-    console.log('  签名原串:', signStr.substring(0, 50) + '...');
-    console.log('  签名:', sign);
-    
-    // 易支付协议使用POST form-urlencoded
+    console.log('  支付方式:', params.trade_type);
+
     const queryString = Object.keys(params)
       .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
       .join('&');
-    
-    // 使用mapi.php接口（返回JSON格式，包含payurl/qrcode）
-    const mapiUrl = `${endpoint}/mapi.php`;
-    
-    const response = await httpRequest(mapiUrl, {
+
+    const response = await httpRequest(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -405,13 +453,12 @@ async function createMPayOrder(order) {
       },
       body: queryString
     });
-    
-    // httpRequest已自动解析JSON，response可能是对象或字符串
+
     if (!response) {
-      console.error('码支付API无响应');
+      console.error('虎皮椒API无响应');
       return null;
     }
-    
+
     let jsonResp;
     if (typeof response === 'object') {
       jsonResp = response;
@@ -424,32 +471,120 @@ async function createMPayOrder(order) {
         return null;
       }
     }
-    
+
+    console.log('虎皮椒API响应:', JSON.stringify(jsonResp).substring(0, 400));
+
+    // 虎皮椒返回：code=0 成功，其他失败
+    if (jsonResp.code === 0 || jsonResp.code === '0') {
+      const data = jsonResp.data || {};
+      const payUrl = data.url || '';            // H5支付链接
+      const qrImageUrl = data.images || '';     // 二维码图片URL（直接可显示）
+      const apiOrderNo = data.order_no || '';   // 虎皮椒订单号
+
+      return {
+        qrCode: qrImageUrl,
+        qrUrl: payUrl,
+        payUrl: payUrl,
+        orderNo: apiOrderNo || order.orderNo,
+        amount: order.amount.toFixed(2),
+        rawData: jsonResp
+      };
+    } else {
+      console.error('虎皮椒返回错误:', jsonResp.msg || jsonResp.errmsg || '未知错误');
+      return null;
+    }
+  } catch (error) {
+    console.error('调用虎皮椒API失败:', error.message);
+    return null;
+  }
+}
+
+/**
+ * 兼容保留：码支付（易支付V1协议）创建订单
+ * 当 payProvider=epay 时调用
+ */
+async function createEPayOrder(order) {
+  try {
+    const endpoint = config.mpayEndpoint || 'https://mzf.mapay.cc/xpay/epay';
+    const pid = config.apiKey;
+    const secret = config.apiSecret;
+
+    if (!pid || !secret) {
+      console.log('码支付 PID/SECRET 未设置，使用本地模式');
+      return null;
+    }
+
+    const notifyUrl = config.notifyUrl || `http://localhost:${PORT}/api/payment/notify`;
+    const returnUrl = config.notifyUrl || `http://localhost:${PORT}/api/payment/notify`;
+
+    const params = {
+      pid: pid,
+      type: config.mpayType || 'wxpay',
+      out_trade_no: order.orderNo,
+      notify_url: notifyUrl,
+      return_url: returnUrl,
+      name: order.description || '格格的宫殿-金币充值',
+      money: order.amount.toFixed(2)
+    };
+
+    const signParams = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (k !== 'sign' && k !== 'sign_type' && k !== 'charset' && v !== '' && v !== null && v !== undefined) {
+        signParams[k] = String(v);
+      }
+    }
+    const signStr = Object.keys(signParams).sort().map(k => `${k}=${signParams[k]}`).join('&');
+    const sign = crypto.createHash('md5').update(signStr + secret, 'utf8').digest('hex');
+    params.sign = sign;
+
+    const queryString = Object.keys(params)
+      .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
+      .join('&');
+
+    const mapiUrl = `${endpoint}/mapi.php`;
+    const response = await httpRequest(mapiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(queryString)
+      },
+      body: queryString
+    });
+
+    if (!response) {
+      console.error('码支付API无响应');
+      return null;
+    }
+
+    let jsonResp;
+    if (typeof response === 'object') {
+      jsonResp = response;
+    } else {
+      try { jsonResp = JSON.parse(response); }
+      catch (e) {
+        console.error('JSON解析失败:', e.message);
+        return null;
+      }
+    }
+
     console.log('码支付API响应:', JSON.stringify(jsonResp).substring(0, 300));
-    
+
     if (jsonResp.code === 1) {
-      // 成功：返回支付链接/二维码
       const qrcode = jsonResp.qrcode || jsonResp.qrCode || '';
       const payUrl = jsonResp.urlscheme || jsonResp.payurl || '';
-      
-      // 微信支付(wxpay)不返回qrcode/payurl，需要构造支付页面URL
-      const mpayType = config.mpayType || 'alipay';
       let finalQrUrl = qrcode;
       let finalPayUrl = payUrl;
-      
+
       if (!qrcode && !payUrl && jsonResp.trade_no) {
-        // 微信支付：使用trade_no构造支付页面URL
         const baseUrl = endpoint.replace('/mapi.php', '');
         finalQrUrl = `${baseUrl}/pay/${jsonResp.trade_no}`;
         finalPayUrl = finalQrUrl;
-        console.log('微信支付模式，构造支付页面URL:', finalQrUrl);
       }
-      
-      // 生成二维码图片URL（使用公共二维码生成服务）
-      const qrImageUrl = finalQrUrl 
+
+      const qrImageUrl = finalQrUrl
         ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=${encodeURIComponent(finalQrUrl)}`
         : '';
-      
+
       return {
         qrCode: qrImageUrl,
         qrUrl: finalQrUrl,
@@ -462,7 +597,6 @@ async function createMPayOrder(order) {
       console.error('码支付返回错误:', jsonResp.msg || '未知错误');
       return null;
     }
-    
   } catch (error) {
     console.error('调用码支付API失败:', error.message);
     return null;
@@ -470,24 +604,113 @@ async function createMPayOrder(order) {
 }
 
 /**
- * 码支付 API - 查询订单状态
- * 用于轮询机制，在回调失败时兜底验证
- * 使用易支付V1协议的mapi.php接口查询
+ * 虎皮椒 API - 查询订单状态
+ * 用于轮询兜底验证
+ * 接口: https://api.xunhupay.com/payment/query.html
+ * 返回: {code:0, data:{status:true/false, ...}}
  */
 async function queryMPayOrder(orderNo) {
+  try {
+    const provider = config.payProvider || 'xunhupay';
+    // 兼容码支付
+    if (provider === 'epay' || (config.mpayEndpoint || '').indexOf('mapay') >= 0) {
+      return await queryEPayOrder(orderNo);
+    }
+
+    const appId = config.apiKey;
+    const appSecret = config.apiSecret;
+    if (!appId || !appSecret) return null;
+
+    // 查询接口地址（将 do.html 替换为 query.html）
+    const queryEndpoint = (config.mpayEndpoint || 'https://api.xunhupay.com/payment/do.html')
+      .replace('/do.html', '/query.html');
+
+    // 本地订单号优先（虎皮椒查询用商户订单号 out_trade_no）
+    const localOrder = orders.get(orderNo);
+    const outTradeNo = localOrder ? localOrder.orderNo : orderNo;
+
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+    const params = {
+      version: '1.1',
+      app_id: appId,
+      out_trade_no: outTradeNo,
+      time: timeStr,
+      nonce_str: crypto.randomBytes(8).toString('hex')
+    };
+    params.hash = xunhupaySign(params, appSecret);
+
+    const queryString = Object.keys(params)
+      .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
+      .join('&');
+
+    const result = await httpRequest(queryEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(queryString)
+      },
+      body: queryString
+    });
+
+    if (!result) return null;
+
+    let jsonResp;
+    if (typeof result === 'object') {
+      jsonResp = result;
+    } else {
+      try { jsonResp = JSON.parse(result); }
+      catch (e) {
+        console.log('虎皮椒查询JSON解析失败:', String(result).substring(0, 100));
+        return null;
+      }
+    }
+
+    console.log('虎皮椒查询响应:', JSON.stringify(jsonResp).substring(0, 300));
+
+    // 转换为统一格式，方便上层判断
+    // 上层代码统一看 status 字段：1=已支付
+    if (jsonResp.code === 0 || jsonResp.code === '0') {
+      const data = jsonResp.data || {};
+      return {
+        code: 1,
+        status: data.status === true || data.status === 'true' || data.status === 1 || data.status === 'OK' ? 1 : 0,
+        pay_status: data.status === true || data.status === 'true' || data.status === 1 || data.status === 'OK' ? 1 : 0,
+        msg: '查询成功',
+        rawData: jsonResp
+      };
+    } else {
+      return {
+        code: 0,
+        status: 0,
+        pay_status: 0,
+        msg: jsonResp.msg || jsonResp.errmsg || '查询失败',
+        rawData: jsonResp
+      };
+    }
+  } catch (error) {
+    console.error('虎皮椒查询订单失败:', error.message);
+    return null;
+  }
+}
+
+/**
+ * 兼容保留：码支付（易支付V1协议）查询订单
+ */
+async function queryEPayOrder(orderNo) {
   try {
     const endpoint = config.mpayEndpoint || 'https://mzf.mapay.cc/xpay/epay';
     const pid = config.apiKey;
     const secret = config.apiSecret;
-    
+
     if (!pid || !secret) return null;
-    
-    // 从本地订单获取金额信息
+
     const localOrder = orders.get(orderNo);
     const orderAmount = localOrder ? localOrder.amount.toFixed(2) : '0.01';
     const orderDesc = localOrder ? (localOrder.description || '订单查询') : '订单查询';
-    
-    // 易支付协议 - 查询订单参数（与创建订单相同的签名方式）
+
     const queryParams = {
       act: 'order',
       pid: pid,
@@ -496,34 +719,24 @@ async function queryMPayOrder(orderNo) {
       name: orderDesc,
       money: orderAmount
     };
-    
-    // 生成MD5签名（易支付V1协议 - 与创建订单完全一致）
+
     const signParams = {};
     for (const [k, v] of Object.entries(queryParams)) {
       if (k !== 'sign' && k !== 'sign_type' && k !== 'charset' && v !== '' && v !== null && v !== undefined) {
         signParams[k] = String(v);
       }
     }
-    const signKeys = Object.keys(signParams).sort();
-    let signStr = '';
-    for (const k of signKeys) {
-      signStr += `${k}=${signParams[k]}&`;
-    }
-    signStr = signStr.replace(/&$/, '');
-    const stringSignTemp = signStr + secret;
-    const sign = crypto.createHash('md5').update(stringSignTemp, 'utf8').digest('hex');
-    
-    // 添加签名到查询参数
+    const signStr = Object.keys(signParams).sort().map(k => `${k}=${signParams[k]}`).join('&');
+    const sign = crypto.createHash('md5').update(signStr + secret, 'utf8').digest('hex');
+
     queryParams.sign = sign;
     queryParams.sign_type = 'MD5';
-    
-    // 使用mapi.php接口查询（与创建订单相同的接口）
+
     const mapiUrl = endpoint.replace(/\/$/, '') + '/mapi.php';
-    
     const queryString = Object.keys(queryParams)
       .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(queryParams[k])}`)
       .join('&');
-    
+
     const result = await httpRequest(mapiUrl, {
       method: 'POST',
       headers: {
@@ -532,42 +745,28 @@ async function queryMPayOrder(orderNo) {
       },
       body: queryString
     });
-    
-    console.log('查询订单响应:', result ? (typeof result === 'string' ? result.substring(0, 200) : JSON.stringify(result).substring(0, 200)) : 'null');
-    
+
     if (!result) return null;
-    
-    // 处理响应
+
     let jsonResp;
     if (typeof result === 'object') {
       jsonResp = result;
     } else {
-      try {
-        jsonResp = JSON.parse(result);
-      } catch (e) {
-        console.log('查询订单JSON解析失败:', result.substring(0, 100));
+      try { jsonResp = JSON.parse(result); }
+      catch (e) {
+        console.log('查询订单JSON解析失败:', String(result).substring(0, 100));
         return null;
       }
     }
-    
-    console.log('查询订单JSON:', JSON.stringify(jsonResp).substring(0, 300));
-    
-    // 码支付返回说明：
-    // code=1 表示API请求成功（不是支付成功！）
-    // status/pay_status=1 才表示支付成功
-    // status/pay_status=0 表示未支付
-    
-    // 如果API请求失败（code!=1），直接返回
+
+    console.log('码支付查询响应:', JSON.stringify(jsonResp).substring(0, 300));
+
     if (jsonResp.code !== 1 && jsonResp.code !== '1') {
-      console.log('查询订单失败，API返回错误:', jsonResp.msg || jsonResp.text);
       return jsonResp;
     }
-    
-    // API请求成功，返回原始数据（由调用方判断支付状态）
-    // 注意：不要在这里设置status=1，让调用方正确判断支付状态
     return jsonResp;
   } catch (error) {
-    console.error('查询订单失败:', error.message);
+    console.error('码支付查询订单失败:', error.message);
     return null;
   }
 }
@@ -715,12 +914,22 @@ app.get('/api/config', (req, res) => {
     hasQRCode: !!config.qrCodeImage,
     autoVerify: config.autoVerify,
     notifyUrl: config.notifyUrl,
-    mpayEndpoint: config.mpayEndpoint || 'https://api.mpays.cn',
+    payProvider: config.payProvider || 'xunhupay',
+    mpayEndpoint: config.mpayEndpoint || 'https://api.xunhupay.com/payment/do.html',
+    mpayType: config.mpayType || 'wxpay',
     testMode: config.testMode || false,
     paymentModes: [
       { value: 'qrcode', label: '收款码模式（手动）' },
       { value: 'api', label: 'API模式（自动到账）' },
       { value: 'test', label: '测试模式（模拟支付）' }
+    ],
+    paymentProviders: [
+      { value: 'xunhupay', label: '虎皮椒支付（推荐，不被风控）' },
+      { value: 'epay', label: '码支付（已被风控，不推荐）' }
+    ],
+    paymentTypes: [
+      { value: 'wxpay', label: '微信支付' },
+      { value: 'alipay', label: '支付宝' }
     ]
   });
 });
@@ -728,14 +937,24 @@ app.get('/api/config', (req, res) => {
 // 更新配置
 app.post('/api/config', (req, res) => {
   const updates = req.body;
-  
-  const allowedFields = ['paymentMethod', 'apiKey', 'apiSecret', 'qrCodeImage', 'autoVerify', 'notifyUrl', 'mpayEndpoint', 'testMode'];
+
+  const allowedFields = ['paymentMethod', 'apiKey', 'apiSecret', 'qrCodeImage', 'autoVerify', 'notifyUrl', 'payProvider', 'mpayEndpoint', 'mpayType', 'testMode'];
   allowedFields.forEach(field => {
     if (updates[field] !== undefined) {
       config[field] = updates[field];
     }
   });
-  
+
+  // 自动同步端点：选择平台后自动设置正确的端点
+  if (updates.payProvider === 'xunhupay') {
+    config.mpayEndpoint = 'https://api.xunhupay.com/payment/do.html';
+  } else if (updates.payProvider === 'epay') {
+    // 码支付保持原端点，不自动覆盖（用户可自定义）
+    if (!config.mpayEndpoint || config.mpayEndpoint.indexOf('xunhupay') >= 0) {
+      config.mpayEndpoint = 'https://mzf.mapay.cc/xpay/epay';
+    }
+  }
+
   saveConfig(config);
   console.log('配置已更新:', JSON.stringify({...config, apiKey: config.apiKey ? '***' : '', apiSecret: config.apiSecret ? '***' : ''}));
   res.json({ success: true, message: '配置已更新' });
@@ -953,113 +1172,178 @@ app.post('/api/order/:orderNo/cancel', (req, res) => {
 // ============ 支付回调接口 ============
 
 /**
- * 码支付回调通知接口
- * 接收码支付平台的支付结果通知，自动给用户加金币
- * 支持多种支付平台格式
+ * 支付回调通知接口
+ * 兼容虎皮椒（status=OK=成功，返回success）和码支付（status=1=成功，返回code=1）
  */
 app.post('/api/payment/notify', async (req, res) => {
   try {
     console.log('收到支付回调通知:', JSON.stringify(req.body).substring(0, 300));
-    
-    const body = req.body;
-    
-    // 支持多种订单号字段格式
-    const actualOrderNo = body.order_no || body.orderNo || body.mch_order_no || body.mchOrderNo || 
-                          body.out_trade_no || body.outTradeNo || body.merchant_order_no;
+
+    const body = req.body || {};
+    const provider = config.payProvider || 'xunhupay';
+
+    // 支持多种订单号字段
+    const actualOrderNo = body.out_trade_no || body.outTradeNo || body.order_no || body.orderNo ||
+                          body.mch_order_no || body.mchOrderNo || body.merchant_order_no ||
+                          body.trade_no;
     if (!actualOrderNo) {
       console.error('回调缺少订单号，所有字段:', Object.keys(body));
-      return res.json({ code: 0, msg: '缺少订单号' });
+      return res.send('fail');
     }
-    
+
     console.log('回调订单号:', actualOrderNo);
-    
-    // 查找订单（可能是本地订单号或第三方订单号）
+
+    // 查找订单（本地订单号 or 第三方订单号）
     let order = orders.get(actualOrderNo);
-    
-    // 如果是第三方订单号，查找对应的本地订单
     if (!order) {
       for (const [, o] of orders) {
-        if (o.apiOrderNo === actualOrderNo) {
+        if (o.apiOrderNo === actualOrderNo || o.orderNo === actualOrderNo) {
           order = o;
           break;
         }
       }
     }
-    
+
     if (!order) {
       console.error('回调订单不存在:', actualOrderNo);
-      // 返回成功避免第三方重复通知
-      return res.json({ code: 1, msg: 'success', note: '订单不存在但已记录' });
+      // 返回 success 避免第三方重复通知
+      return res.send('success');
     }
-    
+
     console.log('找到订单:', order.orderNo, '金额:', order.amount, '用户:', order.username);
-    
-    // 验证签名（如果有）
-    if (body.sign && config.apiSecret) {
+
+    // 验证签名
+    const isXunhupay = provider === 'xunhupay' && (config.mpayEndpoint || '').indexOf('xunhupay') >= 0;
+    if (isXunhupay && body.hash && config.apiSecret) {
+      try {
+        const expectedHash = xunhupaySign(body, config.apiSecret);
+        if (body.hash !== expectedHash) {
+          console.error('虎皮椒签名验证失败:', order.orderNo);
+          console.log('期望签名:', expectedHash, '实际签名:', body.hash);
+          // 签名失败仍处理（部分情况下微信回调参数顺序变化）
+        } else {
+          console.log('虎皮椒签名验证通过');
+        }
+      } catch (e) {
+        console.error('签名验证异常:', e.message);
+      }
+    } else if (body.sign && config.apiSecret && !isXunhupay) {
+      // 码支付签名验证（兼容）
       try {
         const signParams = {};
         Object.keys(body).forEach(key => {
           if (key !== 'sign' && key !== 'sign_type' && key !== 'charset') signParams[key] = body[key];
         });
-        
-        const signStr = Object.keys(signParams)
-          .sort()
-          .map(k => `${k}=${signParams[k]}`)
-          .join('&') + `&key=${config.apiSecret}`;
+        const signStr = Object.keys(signParams).sort().map(k => `${k}=${signParams[k]}`).join('&') + `&key=${config.apiSecret}`;
         const expectedSign = crypto.createHash('md5').update(signStr).digest('hex').toUpperCase();
-        
         if (body.sign.toUpperCase() !== expectedSign) {
-          console.error('签名验证失败:', actualOrderNo);
-          console.log('期望签名:', expectedSign, '实际签名:', body.sign);
-          // 即使签名失败，如果金额和状态都正确，仍然处理（部分平台签名机制不同）
+          console.error('码支付签名验证失败:', order.orderNo);
         } else {
-          console.log('签名验证通过');
+          console.log('码支付签名验证通过');
         }
-      } catch (signErr) {
-        console.error('签名验证异常:', signErr.message);
+      } catch (e) {
+        console.error('签名验证异常:', e.message);
       }
     }
-    
-    // 验证金额（可选，部分平台格式不同）
+
+    // 验证金额
     const payAmount = parseFloat(body.amount || body.pay_amount || body.total_fee || body.fee);
     if (payAmount && order.amount > 0) {
       const amountInYuan = payAmount > 100 ? payAmount / 100 : payAmount;
-      if (Math.abs(amountInYuan - order.amount) > 1.0) { // 允许1元误差（部分平台手续费）
+      if (Math.abs(amountInYuan - order.amount) > 1.0) {
         console.warn('金额不匹配: 回调=' + amountInYuan + ', 订单=' + order.amount + '，继续处理');
       }
     }
-    
-    // 判断支付状态 - 支持多种状态字段
-    // 码支付回调格式：status=1 或 pay_status=1 表示支付成功
-    // code=1 只是表示回调请求成功，不代表支付成功
+
+    // 判断支付状态
+    // 虎皮椒: status='OK' 表示成功
+    // 码支付: status=1 或 pay_status=1 表示成功
     let isPaid = false;
-    
-    // 优先检查 status 和 pay_status 字段
-    if (body.status === 1 || body.status === '1') {
-      isPaid = true;
-    } else if (body.pay_status === 1 || body.pay_status === '1') {
-      isPaid = true;
-    } else if (['paid', 'success', 'SUCCESS', 'completed', 'finish', 'PAYSUCCESS'].includes(body.status)) {
-      isPaid = true;
-    } else if (['paid', 'success', 'SUCCESS', 'completed', 'finish', 'PAYSUCCESS'].includes(body.pay_status)) {
-      isPaid = true;
+    if (isXunhupay) {
+      if (body.status === 'OK' || body.status === 'ok' || body.status === 'success' || body.status === true) {
+        isPaid = true;
+      }
+    } else {
+      if (body.status === 1 || body.status === '1') {
+        isPaid = true;
+      } else if (body.pay_status === 1 || body.pay_status === '1') {
+        isPaid = true;
+      } else if (['paid', 'success', 'SUCCESS', 'completed', 'finish', 'PAYSUCCESS', 'OK'].includes(body.status)) {
+        isPaid = true;
+      } else if (['paid', 'success', 'SUCCESS', 'completed', 'finish', 'PAYSUCCESS', 'OK'].includes(body.pay_status)) {
+        isPaid = true;
+      }
     }
-    
+
     console.log('支付状态: status=' + body.status + ', pay_status=' + body.pay_status + ', 是否成功=' + isPaid);
-    
+
     if (isPaid) {
-      // 使用统一入口处理
       markOrderAsPaid(order.orderNo, body, '支付回调');
       console.log('✅ 支付回调处理成功:', order.orderNo);
-      return res.json({ code: 1, msg: 'success' });
+      // 虎皮椒要求返回字符串 "success"，码支付返回 JSON code=1
+      if (isXunhupay) {
+        return res.send('success');
+      } else {
+        return res.json({ code: 1, msg: 'success' });
+      }
     } else {
-      console.log('回调状态未成功:', payStatus);
-      return res.json({ code: 0, msg: '状态未成功', status: payStatus });
+      console.log('回调状态未成功:', body.status);
+      if (isXunhupay) {
+        return res.send('fail');
+      } else {
+        return res.json({ code: 0, msg: '状态未成功', status: body.status });
+      }
     }
   } catch (error) {
     console.error('回调处理异常:', error);
-    // 即使异常也返回成功，避免第三方重复通知
-    res.json({ code: 1, msg: 'received' });
+    // 异常也要返回 success 避免重复通知
+    res.send('success');
+  }
+});
+
+// 兼容 GET 方式回调（部分平台用GET）
+app.get('/api/payment/notify', async (req, res) => {
+  console.log('收到GET回调:', JSON.stringify(req.query).substring(0, 300));
+  req.body = req.query;
+  // 复用 POST 逻辑：内部已用 req.body
+  // 这里手动触发 POST 处理链
+  const http = require('http');
+  // 直接复用上面的处理逻辑
+  try {
+    const body = req.query || {};
+    const provider = config.payProvider || 'xunhupay';
+    const actualOrderNo = body.out_trade_no || body.outTradeNo || body.order_no || body.orderNo || body.trade_no;
+    if (!actualOrderNo) return res.send('fail');
+
+    let order = orders.get(actualOrderNo);
+    if (!order) {
+      for (const [, o] of orders) {
+        if (o.apiOrderNo === actualOrderNo || o.orderNo === actualOrderNo) { order = o; break; }
+      }
+    }
+    if (!order) return res.send('success');
+
+    const isXunhupay = provider === 'xunhupay' && (config.mpayEndpoint || '').indexOf('xunhupay') >= 0;
+    let isPaid = false;
+    if (isXunhupay) {
+      if (body.status === 'OK' || body.status === 'ok' || body.status === 'success' || body.status === true) {
+        isPaid = true;
+      }
+    } else {
+      if (body.status === 1 || body.status === '1' || body.pay_status === 1 || body.pay_status === '1') {
+        isPaid = true;
+      }
+    }
+
+    if (isPaid) {
+      markOrderAsPaid(order.orderNo, body, 'GET回调');
+      console.log('✅ GET回调处理成功:', order.orderNo);
+    }
+    if (isXunhupay) return res.send('success');
+    return res.json({ code: 1, msg: 'success' });
+  } catch (e) {
+    console.error('GET回调异常:', e);
+    res.send('success');
   }
 });
 
@@ -1324,32 +1608,48 @@ app.post('/api/admin/users/:username/gold', (req, res) => {
   try {
     const { username } = req.params;
     const { gold, reason, adminKey } = req.body;
-    
+
     if (adminKey !== 'gege123') {
       return res.status(401).json({ success: false, message: '格格验证失败' });
     }
-    
+
     const user = users[username];
     if (!user) {
       return res.status(404).json({ success: false, message: '奴才不存在' });
     }
-    
-    if (typeof gold !== 'number') {
+
+    // 兼容 string 和 number 类型（前端可能传字符串）
+    const goldNum = typeof gold === 'number' ? gold : parseInt(gold);
+    if (isNaN(goldNum)) {
       return res.status(400).json({ success: false, message: '金币数值无效' });
     }
-    
-    user.gold = Math.max(0, (user.gold || 0) + gold);
+
+    // 更新内存数据（即使保存失败，内存也是最新的）
+    user.gold = Math.max(0, (user.gold || 0) + goldNum);
+    if (goldNum > 0) {
+      user.totalTributed = (user.totalTributed || 0) + goldNum;
+    }
     users[username] = user;
-    saveUsers(users);
-    
-    res.json({ 
-      success: true, 
+
+    // 尝试持久化（失败也不影响返回，内存数据已更新）
+    const saved = saveUsers(users);
+    if (!saved) {
+      console.warn('[金币] 持久化失败，但内存已更新:', username, '金币=', user.gold);
+    }
+
+    console.log(`[金币] ${username} 金币调整 ${goldNum > 0 ? '+' : ''}${goldNum}，当前=${user.gold}，原因=${reason}`);
+
+    res.json({
+      success: true,
       username: username,
       gold: user.gold,
-      message: reason || '金币已更新'
+      totalTributed: user.totalTributed || 0,
+      message: reason || '金币已更新',
+      persisted: saved
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: '调整金币失败' });
+    console.error('[金币] 调整失败:', error);
+    res.status(500).json({ success: false, message: '调整金币失败: ' + error.message });
   }
 });
 

@@ -248,12 +248,57 @@ function verifySession(token) {
 
 // ============ 配置管理 ============
 
-function loadConfig() {
-  // 虎皮椒支付默认凭证（用户已开通，作为fallback确保支付可用）
-  const DEFAULT_XUNHUPAY_APPID = '201906186425';
-  const DEFAULT_XUNHUPAY_SECRET = '8173df15307b65e6f47fb9d359bcb868';
-  const DEFAULT_PUBLIC_URL = 'https://gege-palacee-production.up.railway.app';
+// 虎皮椒支付默认凭证（用户已开通，作为fallback确保支付可用）
+const DEFAULT_XUNHUPAY_APPID = '201906186425';
+const DEFAULT_XUNHUPAY_SECRET = '8173df15307b65e6f47fb9d359bcb868';
+const DEFAULT_PUBLIC_URL = 'https://gege-palacee-production.up.railway.app';
+// 旧的码支付凭证（用于检测并自动覆盖）
+const LEGACY_EPAY_PID = '12809';
+const LEGACY_EPAY_SECRET = 'AR80YAas4AobLsPKdQlW';
 
+/**
+ * 强制修复旧的码支付配置，自动切换为虎皮椒凭证
+ * 解决Railway环境变量残留旧值导致支付失败的问题
+ */
+function fixLegacyConfig(config) {
+  let changed = false;
+  // 1. 检测旧的码支付端点(mapay.cc)，覆盖为虎皮椒端点
+  if (!config.mpayEndpoint || config.mpayEndpoint.indexOf('mapay') >= 0) {
+    console.log('[支付] 检测到旧端点(码支付)，自动切换为虎皮椒端点');
+    config.mpayEndpoint = 'https://api.xunhupay.com/payment/do.html';
+    changed = true;
+  }
+  // 2. 检测旧的码支付PID(12809)，覆盖为虎皮椒appid
+  if (config.apiKey === LEGACY_EPAY_PID || (config.apiKey && config.apiKey.length <= 5)) {
+    console.log('[支付] 检测到旧凭证(码支付PID)，自动切换为虎皮椒appid');
+    config.apiKey = DEFAULT_XUNHUPAY_APPID;
+    changed = true;
+  }
+  // 3. 检测旧的码支付SECRET，覆盖为虎皮椒app_secret
+  if (config.apiSecret === LEGACY_EPAY_SECRET || (config.apiSecret && config.apiSecret === 'AR80YAas4AobLsPKdQlW')) {
+    console.log('[支付] 检测到旧凭证(码支付SECRET)，自动切换为虎皮椒app_secret');
+    config.apiSecret = DEFAULT_XUNHUPAY_SECRET;
+    changed = true;
+  }
+  // 4. 强制使用虎皮椒支付平台
+  if (config.payProvider !== 'xunhupay') {
+    console.log('[支付] 强制切换为虎皮椒支付平台');
+    config.payProvider = 'xunhupay';
+    changed = true;
+  }
+  // 5. 如果是虎皮椒支付但mpayType是alipay，切换为wxpay（虎皮椒默认微信）
+  if (config.payProvider === 'xunhupay' && config.mpayType === 'alipay') {
+    console.log('[支付] 虎皮椒默认使用微信支付');
+    config.mpayType = 'wxpay';
+    changed = true;
+  }
+  if (changed) {
+    console.log('[支付] 配置已自动修复为虎皮椒支付');
+  }
+  return config;
+}
+
+function loadConfig() {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
@@ -264,39 +309,33 @@ function loadConfig() {
       if (process.env.MPAY_TYPE) config.mpayType = process.env.MPAY_TYPE;
       if (process.env.PAY_PROVIDER) config.payProvider = process.env.PAY_PROVIDER;
       if (process.env.PUBLIC_URL) config.notifyUrl = process.env.PUBLIC_URL + '/api/payment/notify';
-      // 默认切换为虎皮椒支付平台（码支付已被风控）
-      if (!config.payProvider) config.payProvider = 'xunhupay';
-      if (!config.mpayEndpoint || config.mpayEndpoint.indexOf('mapay.cc') >= 0) {
-        config.mpayEndpoint = 'https://api.xunhupay.com/payment/do.html';
-      }
       // 应用默认凭证（如果配置文件中没有或为空）
-      if (!config.apiKey) config.apiKey = process.env.MPAY_API_KEY || DEFAULT_XUNHUPAY_APPID;
-      if (!config.apiSecret) config.apiSecret = process.env.MPAY_API_SECRET || DEFAULT_XUNHUPAY_SECRET;
+      if (!config.apiKey) config.apiKey = DEFAULT_XUNHUPAY_APPID;
+      if (!config.apiSecret) config.apiSecret = DEFAULT_XUNHUPAY_SECRET;
+      if (!config.payProvider) config.payProvider = 'xunhupay';
       if (!config.notifyUrl) config.notifyUrl = (process.env.PUBLIC_URL || DEFAULT_PUBLIC_URL) + '/api/payment/notify';
+      // 强制修复旧的码支付配置
+      config = fixLegacyConfig(config);
       console.log('[支付] 配置已加载: provider=' + config.payProvider + ', app_id=' + config.apiKey + ', notify=' + config.notifyUrl);
       return config;
     }
   } catch (e) {}
-  // 环境变量优先（云部署模式）
-  // 强制检查：如果环境变量 MPAY_ENDPOINT 仍是旧的码支付端点(mapay.cc)，则覆盖为虎皮椒端点
-  let finalEndpoint = process.env.MPAY_ENDPOINT || 'https://api.xunhupay.com/payment/do.html';
-  if (finalEndpoint.indexOf('mapay') >= 0) {
-    console.log('[支付] 检测到旧端点(mapay.cc)，自动切换为虎皮椒端点');
-    finalEndpoint = 'https://api.xunhupay.com/payment/do.html';
-  }
-  return {
+  // fallback分支：环境变量优先
+  const config = {
     paymentMethod: process.env.PAYMENT_METHOD || 'api',
-    apiKey: process.env.MPAY_API_KEY || DEFAULT_XUNHUPAY_APPID,          // 虎皮椒 app_id
-    apiSecret: process.env.MPAY_API_SECRET || DEFAULT_XUNHUPAY_SECRET,    // 虎皮椒 app_secret
+    apiKey: process.env.MPAY_API_KEY || DEFAULT_XUNHUPAY_APPID,
+    apiSecret: process.env.MPAY_API_SECRET || DEFAULT_XUNHUPAY_SECRET,
     qrCodeImage: '',
     callbackUrl: '',
     autoVerify: true,
     notifyUrl: (process.env.PUBLIC_URL || DEFAULT_PUBLIC_URL) + '/api/payment/notify',
-    payProvider: process.env.PAY_PROVIDER || 'xunhupay',                       // xunhupay=虎皮椒, epay=码支付
-    mpayEndpoint: finalEndpoint,
-    mpayType: process.env.MPAY_TYPE || 'wxpay',     // wxpay=微信, alipay=支付宝
+    payProvider: process.env.PAY_PROVIDER || 'xunhupay',
+    mpayEndpoint: process.env.MPAY_ENDPOINT || 'https://api.xunhupay.com/payment/do.html',
+    mpayType: process.env.MPAY_TYPE || 'wxpay',
     testMode: false
   };
+  // 强制修复旧的码支付配置
+  return fixLegacyConfig(config);
 }
 
 function saveConfig(config) {

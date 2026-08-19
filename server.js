@@ -263,34 +263,37 @@ const LEGACY_EPAY_SECRET = 'AR80YAas4AobLsPKdQlW';
  */
 function fixLegacyConfig(config) {
   let changed = false;
-  // 1. 检测旧的码支付端点(mapay.cc)，覆盖为虎皮椒端点
-  if (!config.mpayEndpoint || config.mpayEndpoint.indexOf('mapay') >= 0) {
-    console.log('[支付] 检测到旧端点(码支付)，自动切换为虎皮椒端点');
-    config.mpayEndpoint = 'https://api.xunhupay.com/payment/do.html';
-    changed = true;
-  }
-  // 2. 检测旧的码支付PID(12809)，覆盖为虎皮椒appid
-  if (config.apiKey === LEGACY_EPAY_PID || (config.apiKey && config.apiKey.length <= 5)) {
-    console.log('[支付] 检测到旧凭证(码支付PID)，自动切换为虎皮椒appid');
-    config.apiKey = DEFAULT_XUNHUPAY_APPID;
-    changed = true;
-  }
-  // 3. 检测旧的码支付SECRET，覆盖为虎皮椒app_secret
-  if (config.apiSecret === LEGACY_EPAY_SECRET || (config.apiSecret && config.apiSecret === 'AR80YAas4AobLsPKdQlW')) {
-    console.log('[支付] 检测到旧凭证(码支付SECRET)，自动切换为虎皮椒app_secret');
-    config.apiSecret = DEFAULT_XUNHUPAY_SECRET;
-    changed = true;
-  }
-  // 4. 强制使用虎皮椒支付平台
+  // 0. 强制使用虎皮椒支付平台（最优先）
   if (config.payProvider !== 'xunhupay') {
     console.log('[支付] 强制切换为虎皮椒支付平台');
     config.payProvider = 'xunhupay';
     changed = true;
   }
-  // 5. 如果是虎皮椒支付但mpayType是alipay，切换为wxpay（虎皮椒默认微信）
-  if (config.payProvider === 'xunhupay' && config.mpayType === 'alipay') {
-    console.log('[支付] 虎皮椒默认使用微信支付');
-    config.mpayType = 'wxpay';
+  // 1. 虎皮椒支付时，无条件强制设置正确的端点（不依赖检测，直接覆盖）
+  if (config.payProvider === 'xunhupay') {
+    const correctEndpoint = 'https://api.xunhupay.com/payment/do.html';
+    if (config.mpayEndpoint !== correctEndpoint) {
+      console.log('[支付] 强制设置虎皮椒端点:', config.mpayEndpoint, '->', correctEndpoint);
+      config.mpayEndpoint = correctEndpoint;
+      changed = true;
+    }
+    // 2. 虎皮椒默认使用微信支付
+    if (config.mpayType !== 'wxpay') {
+      console.log('[支付] 虎皮椒强制使用微信支付:', config.mpayType, '-> wxpay');
+      config.mpayType = 'wxpay';
+      changed = true;
+    }
+  }
+  // 3. 检测旧的码支付PID(12809)，覆盖为虎皮椒appid
+  if (config.apiKey === LEGACY_EPAY_PID || (config.apiKey && config.apiKey.length <= 5)) {
+    console.log('[支付] 检测到旧凭证(码支付PID)，自动切换为虎皮椒appid');
+    config.apiKey = DEFAULT_XUNHUPAY_APPID;
+    changed = true;
+  }
+  // 4. 检测旧的码支付SECRET，覆盖为虎皮椒app_secret
+  if (config.apiSecret === LEGACY_EPAY_SECRET || (config.apiSecret && config.apiSecret === 'AR80YAas4AobLsPKdQlW')) {
+    console.log('[支付] 检测到旧凭证(码支付SECRET)，自动切换为虎皮椒app_secret');
+    config.apiSecret = DEFAULT_XUNHUPAY_SECRET;
     changed = true;
   }
   if (changed) {

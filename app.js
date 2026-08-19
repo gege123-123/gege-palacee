@@ -1149,24 +1149,28 @@ async function generateRechargeQR() {
           if (rechargePayQr) {
             var html = '';
             
-            // PC端：显示二维码
-            if (!isMobile && result.qrCode) {
+            // 移动端：直接显示二维码图片（包在<a>里可点击进入完整支付页）
+            // 微信内长按图片可直接识别支付；非微信浏览器点击图片进入完整指引页
+            if (isMobile && result.qrCode) {
+              html += '<a href="' + jumpUrl + '" style="display:block;text-align:center;text-decoration:none;">';
+              html += '<div style="background:#fff;padding:12px;border-radius:14px;display:inline-block;margin-top:10px;border:3px solid #FFD700;">';
+              html += '<img src="' + result.qrCode + '" alt="微信支付二维码" style="width:200px;height:200px;display:block;">';
+              html += '</div>';
+              html += '<div style="margin-top:12px;font-size:14px;font-weight:bold;color:#FFD700;">💰 支付 ¥' + price + ' 获得 ' + gold + ' 金币</div>';
+              if (isWeixin) {
+                html += '<div style="margin-top:10px;font-size:13px;color:#4ADE80;line-height:1.6;">💡 长按上方二维码<br>选择"识别图中二维码"付款</div>';
+                html += '<div style="margin-top:6px;font-size:12px;color:rgba(255,215,0,0.7);">（点图片进入完整支付指引）</div>';
+              } else {
+                html += '<div style="margin-top:10px;font-size:13px;color:#60A5FA;line-height:1.6;">📱 打开微信 → 扫一扫 → 右上角··· → 从相册选图<br>或点图片进入完整支付指引页</div>';
+              }
+              html += '</a>';
+            } else if (!isMobile && result.qrCode) {
+              // PC端：显示二维码
               html += '<img src="' + result.qrCode + '" alt="付款二维码" style="max-width:220px;max-height:220px;border-radius:12px;border:3px solid #FFD700;display:block;margin:0 auto;">';
             }
             
-            // 跳转按钮 - 使用<a>标签直接指向同源中转页面，浏览器不会拦截同源跳转
-            if (isMobile) {
-              html += '<div style="margin-top:15px;text-align:center;">';
-              if (isWeixin) {
-                // 微信内：点击后进入中转页面，直接显示二维码长按识别
-                html += '<a href="' + jumpUrl + '" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:25px;text-decoration:none;font-weight:bold;font-size:16px;box-shadow:0 4px 12px rgba(255,215,0,0.4);">📱 点击进入微信支付 ¥' + price + '</a>';
-                html += '<p style="margin-top:12px;font-size:13px;color:#4ADE80;line-height:1.6;">✅ 进入后长按二维码即可完成支付</p>';
-              } else {
-                html += '<a href="' + jumpUrl + '" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:25px;text-decoration:none;font-weight:bold;font-size:16px;box-shadow:0 4px 12px rgba(255,215,0,0.4);">📱 点击前往' + payTypeName + '支付 ¥' + price + '</a>';
-                html += '<p style="margin-top:10px;font-size:12px;color:#888;">点击按钮将自动跳转到' + payTypeName + '支付页面</p>';
-              }
-              html += '</div>';
-            } else {
+            // PC端按钮 + 移动端二维码图下也放一个跳转按钮（备用）
+            if (!isMobile) {
               // PC端：显示二维码+按钮
               if (result.qrCode) {
                 html += '<p style="text-align:center;margin-top:10px;font-size:12px;color:#888;">💡 请使用' + payTypeName + '扫描二维码，或点击下方按钮跳转</p>';

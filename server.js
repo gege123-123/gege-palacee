@@ -47,7 +47,8 @@ app.use(cors({
 // ============ 强制清除浏览器缓存的重定向 ============
 // 访问 /new 或 /v2 时重定向到首页并附带唯一参数，强制浏览器加载最新内容
 // /pay 是虎皮椒支付开通后的新永久入口（2026-08-19）
-app.get(['/new', '/v2', '/v3', '/latest', '/pay', '/palace', '/gege'], function(req, res) {
+// /forever 是虎皮椒支付正式上线后的永久性网址（2026-08-20）
+app.get(['/new', '/v2', '/v3', '/latest', '/pay', '/palace', '/gege', '/forever', '/xunhupay', '/pay2026'], function(req, res) {
   var stamp = Date.now();
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');

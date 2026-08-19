@@ -322,14 +322,14 @@ async function testNetwork() {
 function showRegisterForm() {
   document.getElementById('loginForm').style.display = 'none';
   document.getElementById('registerForm').style.display = 'block';
-  document.getElementById('userLoginTitle').textContent = '奴才注册';
+  document.getElementById('userLoginTitle').textContent = '注册';
   if (!networkChecked) testNetwork();
 }
 
 function showLoginForm() {
   document.getElementById('registerForm').style.display = 'none';
   document.getElementById('loginForm').style.display = 'block';
-  document.getElementById('userLoginTitle').textContent = '奴才登录';
+  document.getElementById('userLoginTitle').textContent = '登录';
   if (!networkChecked) testNetwork();
 }
 
@@ -377,7 +377,7 @@ async function userRegister() {
       closeUserLoginModal();
       updateUserInfoBar();
       loadGoldFromServer();
-      showToast('奴才' + data.user.servantName + ' 注册成功！', 3000);
+      showToast(data.user.servantName + ' 注册成功！', 3000);
     } else {
       var msg = (data && data.message) ? data.message : '注册失败，请检查网络';
       showToast(msg, 3000);
@@ -397,7 +397,7 @@ async function userLogin() {
     return;
   }
   
-  showToast('正在觐见格格...');
+  showToast('正在登录...');
   
   var data = await apiRequest('/api/user/login', {
     method: 'POST',
@@ -411,12 +411,33 @@ async function userLogin() {
     localStorage.setItem('gege_user_token', data.token);
     localStorage.setItem('gege_user_name', username);
     localStorage.setItem('gege_servant_name', data.user.servantName);
+    
+    var loginCount = parseInt(localStorage.getItem('gege_login_count') || '0') + 1;
+    localStorage.setItem('gege_login_count', loginCount.toString());
+    localStorage.setItem('gege_last_login', Date.now().toString());
+    
     saveAccountMemory();
     
     closeUserLoginModal();
     updateUserInfoBar();
     syncLocalAccountFromServer();
-    showToast('奴才' + data.user.servantName + ' 觐见成功！', 3000);
+    
+    var servantName = data.user.servantName || username;
+    var greetings = [
+        servantName + ' 登录成功！欢迎回来！',
+        servantName + ' 回来了！想你了~',
+        servantName + ' 上线啦！金币还充裕吗？',
+        servantName + ' 归队！你的数据已同步',
+        servantName + ' 来啦！准备好开启新的一天了吗？'
+    ];
+    var greeting = greetings[Math.floor(Math.random() * greetings.length)];
+    showToast(greeting, 3500);
+    
+    setTimeout(function() {
+        if (state.gold < 10) {
+            showToast('⚠ 金币不足，快去充值吧！', 3000);
+        }
+    }, 2000);
   } else {
     showToast(data ? data.message : '登录失败');
   }
@@ -444,7 +465,7 @@ async function userLogout() {
   updateGoldDisplay();
   updateRankDisplay();
   showUserLoginModal();
-  showToast('奴才已退出，期待下次觐见');
+  showToast('已退出登录，期待下次再见');
 }
 
 function closeUserLoginModal() {
@@ -472,14 +493,55 @@ function updateUserInfoBar() {
     var userInfoEl = document.getElementById('rankUserInfo');
     if (userInfoEl) {
       userInfoEl.innerHTML = 
-        '<div class="info-row"><span>' + (state.currentUser.servantName || '奴才') + '</span></div>' +
+        '<div class="info-row"><span>' + (state.currentUser.servantName || state.currentUser.username || '用户') + '</span></div>' +
         '<div class="info-row"><span>🪙</span><span>' + state.gold + '</span></div>' +
         '<div class="info-row"><span>🙇</span><span>' + state.kneelCount + '</span></div>' +
         '<button class="rank-logout" onclick="userLogout()">退出</button>';
     }
+    initRankListState();
     updateRankDisplay();
+    updateServantStatusPanel();
   } else {
     bar.style.display = 'none';
+  }
+}
+
+function updateServantStatusPanel() {
+  var rankDisplay = document.getElementById('servantRankDisplay');
+  var progressText = document.getElementById('servantProgressText');
+  var progressFill = document.getElementById('servantProgressFill');
+  if (!rankDisplay) return;
+  
+  var tributed = state.totalTributed || 0;
+  var tiers = [
+    { cost: 0, name: '初入门槛' },
+    { cost: 100, name: '第一阶 · 入门' },
+    { cost: 500, name: '第二阶 · 驯化' },
+    { cost: 1000, name: '第三阶 · 深度驯化' },
+    { cost: 5000, name: '第四阶 · 忠诚' },
+    { cost: 10000, name: '第五阶 · 极品奴才' }
+  ];
+  
+  var currentTier = tiers[0];
+  var nextTier = tiers[1];
+  for (var i = tiers.length - 1; i >= 0; i--) {
+    if (tributed >= tiers[i].cost) {
+      currentTier = tiers[i];
+      nextTier = tiers[i + 1] || null;
+      break;
+    }
+  }
+  
+  rankDisplay.textContent = currentTier.name;
+  
+  if (nextTier) {
+    var progress = ((tributed - currentTier.cost) / (nextTier.cost - currentTier.cost)) * 100;
+    progress = Math.min(100, Math.max(0, progress));
+    progressFill.style.width = progress + '%';
+    progressText.textContent = '距离下一阶还需 ' + (nextTier.cost - tributed) + ' 金币';
+  } else {
+    progressFill.style.width = '100%';
+    progressText.textContent = '已达最高阶！格格最宠之奴才！';
   }
 }
 
@@ -619,6 +681,8 @@ function saveAccountMemory() {
       gold: state.gold,
       totalTributed: state.totalTributed,
       kneelCount: state.kneelCount,
+      loginCount: parseInt(localStorage.getItem('gege_login_count') || '0'),
+      lastLogin: localStorage.getItem('gege_last_login') || Date.now().toString(),
       savedAt: Date.now()
     };
     
@@ -652,7 +716,7 @@ async function restoreAccountMemory() {
         if (account.username) {
           state.currentUser = {
             username: account.username,
-            servantName: account.servantName || '奴才'
+            servantName: account.servantName || account.username || '用户'
           };
         }
         
@@ -693,7 +757,7 @@ async function restoreAccountMemory() {
       if (dbAccount.username) {
         state.currentUser = {
           username: dbAccount.username,
-          servantName: dbAccount.servantName || '奴才'
+          servantName: dbAccount.servantName || dbAccount.username || '用户'
         };
       }
       
@@ -723,11 +787,11 @@ async function checkServerConfig() {
 
 // ============ 金币系统 ============
 function loadGold() {
-  var saved = localStorage.getItem('gege_gold');
+  var saved = localStorage.getItem('gege_local_gold');
   if (saved !== null) {
     state.gold = parseInt(saved) || 0;
   }
-  var total = localStorage.getItem('gege_total_tributed');
+  var total = localStorage.getItem('gege_local_total_tributed');
   if (total !== null) {
     state.totalTributed = parseInt(total) || 0;
   }
@@ -755,68 +819,105 @@ function setUserName() {
 }
 
 function saveGold() {
-  localStorage.setItem('gege_gold', state.gold.toString());
+  localStorage.setItem('gege_local_gold', state.gold.toString());
 }
 
 function saveTotalTributed() {
-  localStorage.setItem('gege_total_tributed', state.totalTributed.toString());
+  localStorage.setItem('gege_local_total_tributed', state.totalTributed.toString());
 }
 
 function updateGoldDisplay() {
   var el = document.getElementById('goldAmount');
   if (el) el.textContent = state.gold;
+  updateServantStatusPanel();
+}
+
+// 叩拜榜单展开/关闭
+function toggleRankList() {
+  var wrapper = document.getElementById('rankListWrapper');
+  var icon = document.getElementById('rankToggleIcon');
+  if (!wrapper) return;
+  
+  if (wrapper.style.display === 'none') {
+    wrapper.style.display = 'block';
+    if (icon) icon.textContent = '▼';
+    localStorage.setItem('gege_rank_list_collapsed', '0');
+    updateRankDisplay();
+  } else {
+    wrapper.style.display = 'none';
+    if (icon) icon.textContent = '▶';
+    localStorage.setItem('gege_rank_list_collapsed', '1');
+  }
+}
+
+// 初始化榜单折叠状态
+function initRankListState() {
+  var collapsed = localStorage.getItem('gege_rank_list_collapsed');
+  var wrapper = document.getElementById('rankListWrapper');
+  var icon = document.getElementById('rankToggleIcon');
+  if (collapsed === '1') {
+    if (wrapper) wrapper.style.display = 'none';
+    if (icon) icon.textContent = '▶';
+  }
 }
 
 async function updateRankDisplay() {
   var rankList = document.getElementById('rankList');
   if (!rankList) return;
   
-  var displayName = state.userName || '奴才';
-  var myKneelCount = state.kneelCount || 0;
+  var myUsername = state.currentUser ? state.currentUser.username : null;
+  var myServantName = state.currentUser ? (state.currentUser.servantName || state.currentUser.username) : '用户';
+  var myKneel = state.kneelCount || 0;
   
-  var myRank = '';
-  if (myKneelCount > 0) {
-    myRank = '<div class="rank-item my-rank">' +
+  var myRankItem = '';
+  if (myKneel > 0) {
+    myRankItem = '<div class="rank-item my-rank">' +
       '<span class="rank-num">我</span>' +
-      '<span class="rank-name">' + (state.currentUser ? state.currentUser.servantName : displayName) + '</span>' +
-      '<span class="rank-value">🙇' + myKneelCount + '</span>' +
+      '<span class="rank-name">' + myServantName + '</span>' +
+      '<span class="rank-value">🙇' + myKneel + '</span>' +
       '</div>';
   }
   
-  // 默认排行榜
+  // 默认排行榜（使用通用名字）
   var defaultRankList = [
-    { servantName: '小狗子', kneelCount: 9999 },
-    { servantName: '贱婢', kneelCount: 8888 },
-    { servantName: '狗奴才', kneelCount: 6666 },
-    { servantName: '下贱胚', kneelCount: 5200 },
-    { servantName: '可怜虫', kneelCount: 3800 },
-    { servantName: '哈巴狗', kneelCount: 2800 },
-    { servantName: '小的', kneelCount: 1800 },
-    { servantName: '奴才甲', kneelCount: 1200 },
-    { servantName: '奴婢', kneelCount: 888 },
-    { servantName: '小厮', kneelCount: 520 }
+    { servantName: '风云', kneelCount: 9999 },
+    { servantName: '月影', kneelCount: 8888 },
+    { servantName: '星河', kneelCount: 6666 },
+    { servantName: '逍遥', kneelCount: 5200 },
+    { servantName: '清风', kneelCount: 3800 },
+    { servantName: '明月', kneelCount: 2888 },
+    { servantName: '墨白', kneelCount: 1800 },
+    { servantName: '丹青', kneelCount: 1200 },
+    { servantName: '紫玉', kneelCount: 888 },
+    { servantName: '金风', kneelCount: 520 }
   ];
   
   // 从服务器获取叩拜排行榜
-  var serverRank = await apiRequest('/api/user/kneel-rank');
-  var rankData = defaultRankList;
-  
-  if (serverRank && serverRank.success && serverRank.rankList && serverRank.rankList.length > 0) {
-    rankData = serverRank.rankList.slice(0, 10);
+  try {
+    var serverRank = await apiRequest('/api/user/kneel-rank');
+    if (serverRank && serverRank.success && serverRank.rankList && serverRank.rankList.length > 0) {
+      var rankData = serverRank.rankList.slice(0, 10);
+      rankList.innerHTML = myRankItem + renderRankHtml(rankData);
+    } else {
+      rankList.innerHTML = myRankItem + renderRankHtml(defaultRankList);
+    }
+  } catch(e) {
+    rankList.innerHTML = myRankItem + renderRankHtml(defaultRankList);
   }
-  
+}
+
+function renderRankHtml(rankData) {
   var rankHtml = '';
   for (var i = 0; i < rankData.length; i++) {
     var rankNum = i + 1;
-    var rankClass = rankNum <= 3 ? 'rank-item top-rank' : 'rank-item';
-    rankHtml += '<div class="' + rankClass + '">' +
-      '<span class="rank-num">' + (rankNum === 1 ? '🥇' : rankNum === 2 ? '🥈' : rankNum === 3 ? '🥉' : rankNum) + '</span>' +
-      '<span class="rank-name">' + rankData[i].servantName + '</span>' +
+    var medal = rankNum === 1 ? '🥇' : rankNum === 2 ? '🥈' : rankNum === 3 ? '🥉' : rankNum;
+    rankHtml += '<div class="rank-item">' +
+      '<span class="rank-num">' + medal + '</span>' +
+      '<span class="rank-name">' + (rankData[i].servantName || rankData[i].username) + '</span>' +
       '<span class="rank-value">🙇' + (rankData[i].kneelCount || 0) + '</span>' +
       '</div>';
   }
-  
-  rankList.innerHTML = myRank + rankHtml;
+  return rankHtml;
 }
 
 // ============ 充值功能 ============
@@ -1183,7 +1284,13 @@ function confirmRechargeSuccess() {
 }
 
 function showRechargeSuccessUI(gold) {
-  showToast('🎉 充值成功！获得 ' + gold + ' 金币', 3000);
+  var successMessages = [
+    '🎉 上贡成功！奴才诚意已达！获得 ' + gold + ' 金币',
+    '🎉 格格已收到你的孝敬！' + gold + ' 金币已入账',
+    '🎉 奴才又近了一步！获得 ' + gold + ' 金币',
+    '🎉 上贡光荣！奴才继续努力！获得 ' + gold + ' 金币'
+  ];
+  showToast(successMessages[Math.floor(Math.random() * successMessages.length)], 3500);
   
   // 更新金币数字的动画效果
   var goldEl = document.getElementById('goldAmount');
@@ -1558,6 +1665,7 @@ function adminLogin() {
   var password = document.getElementById('adminPassword').value;
   if (password === 'gege123') {
     state.isAdmin = true;
+    localStorage.setItem('gege_is_admin', '1');
     closeAdminLogin();
     
     var adminPanel = document.getElementById('adminPanel');
@@ -1568,6 +1676,9 @@ function adminLogin() {
     
     showToast('格格驾到！控制殿已开启');
     document.getElementById('adminPassword').value = '';
+    
+    // 自动加载用户列表
+    updateGoldManageInfo();
   } else {
     showToast('口令错误，无法进入！');
   }
@@ -1575,6 +1686,7 @@ function adminLogin() {
 
 function logoutAdmin() {
   state.isAdmin = false;
+  localStorage.removeItem('gege_is_admin');
   
   var adminPanel = document.getElementById('adminPanel');
   if (adminPanel) adminPanel.style.display = 'none';
@@ -2063,8 +2175,7 @@ function uploadMediaFromPage() {
 var GEGE_NAMES = {
   1: '瓜尔佳格格',
   2: '爱新觉罗璇格格',
-  3: '爱新觉罗凌霜格格',
-  4: '镶黄旗古萌格格'
+  3: '镶黄旗古萌格格'
 };
 
 // 切换格格Tab（控制殿内）
@@ -2744,15 +2855,24 @@ function closeSettings() {
 // ============ 金币管理功能（搜索奴才账户） ============
 var goldSearchResults = [];
 var selectedGoldUser = null;
+var goldSearchDebounceTimer = null;
+var goldSearchRequestId = 0;
 
 function updateGoldManageInfo() {
-  // 清空搜索框并加载全部奴才
+  var resultsEl = document.getElementById('goldSearchResults');
+  if (!resultsEl) return;
+  
+  if (!state.isAdmin) {
+    resultsEl.innerHTML = '<div style="color:#DAA520;text-align:center;padding:20px;font-size:14px;">🔒 请格格先登录控制殿</div>';
+    return;
+  }
+  
   var searchInput = document.getElementById('goldSearchInput');
   if (searchInput) searchInput.value = '';
   searchGoldUsers();
 }
 
-// 搜索奴才账户
+// 搜索奴才账户（带防抖和竞态保护）
 async function searchGoldUsers() {
   if (!state.isAdmin) {
     showToast('请格格先登录控制殿');
@@ -2764,20 +2884,61 @@ async function searchGoldUsers() {
   var resultsEl = document.getElementById('goldSearchResults');
   
   if (!resultsEl) return;
-  resultsEl.innerHTML = '<div style="color:#DAA520;text-align:center;padding:20px;font-size:14px;">🔍 加载奴才名单...</div>';
   
-  try {
-    var url = '/api/admin/users/search?q=' + encodeURIComponent(q) + '&adminKey=gege123';
-    var result = await apiRequest(url);
+  // 清除之前的防抖定时器
+  if (goldSearchDebounceTimer) {
+    clearTimeout(goldSearchDebounceTimer);
+  }
+  
+  // 防抖300ms，避免频繁请求
+  goldSearchDebounceTimer = setTimeout(async function() {
+    var myRequestId = ++goldSearchRequestId;
+    resultsEl.innerHTML = '<div style="color:#DAA520;text-align:center;padding:20px;font-size:14px;">🔍 搜索中...</div>';
     
-    if (result.success && result.users) {
-      goldSearchResults = result.users;
-      renderGoldSearchResults();
-    } else {
-      resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:20px;">' + (result.message || '加载失败') + '</div>';
+    try {
+      var url = '/api/admin/users/search?q=' + encodeURIComponent(q) + '&adminKey=gege123';
+      console.log('[金币搜索] 请求URL:', API_BASE + url);
+      var result = await apiRequest(url);
+      console.log('[金币搜索] 响应:', result);
+      
+      // 竞态保护：如果有更新的请求，丢弃这个结果
+      if (myRequestId !== goldSearchRequestId) return;
+      
+      if (result && result.success && result.users) {
+        goldSearchResults = result.users;
+        renderGoldSearchResults();
+      } else {
+        var errMsg = (result && result.message) ? result.message : '加载失败';
+        console.error('[金币搜索] 失败:', errMsg);
+        resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:20px;font-size:14px;">⚠️ ' + errMsg + '<br><br><button onclick="searchGoldUsers()" style="padding:8px 20px;background:#8B0000;color:#FFD700;border:2px solid #FFD700;border-radius:6px;cursor:pointer;font-size:14px;">🔄 重新加载</button></div>';
+      }
+    } catch(e) {
+      console.error('[金币搜索] 异常:', e);
+      if (myRequestId !== goldSearchRequestId) return;
+      resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:20px;font-size:14px;">📡 网络错误: ' + (e.message || '未知错误') + '<br><br><button onclick="searchGoldUsers()" style="padding:8px 20px;background:#8B0000;color:#FFD700;border:2px solid #FFD700;border-radius:6px;cursor:pointer;font-size:14px;">🔄 重新加载</button></div>';
     }
+  }, 300);
+}
+
+// 格式化日期：兼容数字时间戳和字符串日期
+function formatCreatedDate(createdAt) {
+  if (!createdAt) return '未知';
+  try {
+    var date;
+    if (typeof createdAt === 'number') {
+      date = new Date(createdAt);
+    } else {
+      date = new Date(createdAt);
+    }
+    if (isNaN(date.getTime())) {
+      return String(createdAt).substring(0, 10);
+    }
+    var y = date.getFullYear();
+    var m = String(date.getMonth() + 1).padStart(2, '0');
+    var d = String(date.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
   } catch(e) {
-    resultsEl.innerHTML = '<div style="color:#ff6b6b;text-align:center;padding:20px;">加载出错，请刷新重试</div>';
+    return String(createdAt || '').substring(0, 10) || '未知';
   }
 }
 
@@ -2786,7 +2947,7 @@ function renderGoldSearchResults() {
   if (!resultsEl) return;
   
   if (goldSearchResults.length === 0) {
-    resultsEl.innerHTML = '<div style="color:#DAA520;text-align:center;padding:20px;">暂无奴才注册</div>';
+    resultsEl.innerHTML = '<div style="color:#DAA520;text-align:center;padding:20px;">暂无用户注册</div>';
     return;
   }
   
@@ -2797,21 +2958,20 @@ function renderGoldSearchResults() {
       '<div style="display:flex;justify-content:space-between;align-items:center;">' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
           '<span style="color:#FFD700;font-weight:bold;font-size:16px;">' + u.username + '</span>' +
-          '<span style="color:#DAA520;font-size:13px;">（' + (u.servantName || '奴才') + '）</span>' +
         '</div>' +
         '<div style="color:#FF4500;font-weight:bold;font-size:16px;">🪙 ' + (u.gold || 0) + '</div>' +
       '</div>' +
       '<div style="display:flex;gap:12px;font-size:12px;color:#B8860B;margin-top:4px;">' +
         '<span>💎 奉献:' + (u.totalTributed || 0) + '</span>' +
         '<span>🙇 叩拜:' + (u.kneelCount || 0) + '</span>' +
-        '<span>📅 ' + ((u.createdAt || '').substring(0, 10)) + '</span>' +
+        '<span>📅 ' + formatCreatedDate(u.createdAt) + '</span>' +
       '</div>' +
     '</div>';
   }
   resultsEl.innerHTML = html;
 }
 
-// 选中某个奴才进行金币调整
+// 选中某个用户进行金币调整
 function selectGoldUser(username) {
   if (!state.isAdmin) return;
   
@@ -2823,7 +2983,7 @@ function selectGoldUser(username) {
   var detail = document.getElementById('goldManageDetail');
   if (detail) detail.classList.remove('hidden');
   
-  document.getElementById('goldDetailName').textContent = '👤 ' + user.username + '（' + (user.servantName || '奴才') + '）';
+  document.getElementById('goldDetailName').textContent = '👤 ' + user.username;
   document.getElementById('goldDetailGold').textContent = user.gold || 0;
   document.getElementById('goldDetailTributed').textContent = user.totalTributed || 0;
   document.getElementById('goldDetailKneel').textContent = user.kneelCount || 0;
@@ -2832,10 +2992,10 @@ function selectGoldUser(username) {
   document.getElementById('goldAdjustInput').focus();
 }
 
-// 快速调整选中奴才的金币
+// 快速调整选中用户的金币
 function adjustSelectedGold(amount) {
   if (!state.isAdmin) { showToast('请格格先登录控制殿'); return; }
-  if (!selectedGoldUser) { showToast('请先选择一个奴才账户'); return; }
+  if (!selectedGoldUser) { showToast('请先选择一个用户账户'); return; }
   
   var reason = amount > 0 ? '格格赏赐' : '格格扣除';
   adjustUserGold(selectedGoldUser.username, amount, reason);
@@ -2844,7 +3004,7 @@ function adjustSelectedGold(amount) {
 // 确认自定义金额调整
 function confirmAdjustGold() {
   if (!state.isAdmin) { showToast('请格格先登录控制殿'); return; }
-  if (!selectedGoldUser) { showToast('请先选择一个奴才账户'); return; }
+  if (!selectedGoldUser) { showToast('请先选择一个用户账户'); return; }
   
   var input = document.getElementById('goldAdjustInput');
   if (!input || !input.value) { showToast('请输入金币数量'); return; }
@@ -2881,11 +3041,22 @@ async function adjustUserGold(username, amount, reason) {
         document.getElementById('goldDetailGold').textContent = result.gold;
       }
       
-      // 如果是当前登录用户，同步更新
+      // 如果是当前登录用户，同步更新所有数据
       if (state.currentUser && state.currentUser.username === username) {
         state.gold = result.gold;
         saveGold();
         updateGoldDisplay();
+        updateUserInfoBar();
+        updateRankDisplay();
+        saveAccountMemory();
+      }
+      
+      // 刷新排行榜（金币变化可能影响排名）
+      updateRankDisplay();
+      
+      // 重新加载搜索结果以显示最新金币数
+      if (document.getElementById('goldSearchResults')) {
+        searchGoldUsers();
       }
     } else {
       showToast('❌ ' + (result.message || '调整失败'));
@@ -3483,6 +3654,31 @@ function loadUnlockedAlbums() {
 // 页面加载后再执行，确保DOM已就绪
 document.addEventListener('DOMContentLoaded', function() {
   loadUnlockedAlbums();
+  
+  // 恢复管理员状态
+  if (localStorage.getItem('gege_is_admin') === '1') {
+    state.isAdmin = true;
+    var adminPanel = document.getElementById('adminPanel');
+    if (adminPanel) adminPanel.style.display = 'flex';
+    var adminUploadBig = document.getElementById('adminUploadBig');
+    if (adminUploadBig) adminUploadBig.style.display = 'block';
+    console.log('🔑 管理员状态已恢复');
+    // 自动加载用户列表
+    setTimeout(function() {
+      var searchInput = document.getElementById('goldSearchInput');
+      if (searchInput) searchGoldUsers();
+    }, 500);
+  }
+  
+  // 启动定时同步（每30秒从服务器同步一次数据，确保多端数据一致）
+  if (!window._dataSyncTimer) {
+    window._dataSyncTimer = setInterval(function() {
+      if (state.userToken && document.visibilityState === 'visible') {
+        loadGoldFromServer().catch(function() {});
+      }
+    }, 30000);
+    console.log('📊 数据同步定时器已启动（每30秒）');
+  }
 });
 // 如果DOM已经加载完成，立即执行
 if (document.readyState !== 'loading') {

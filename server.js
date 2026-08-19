@@ -46,7 +46,9 @@ app.use(cors({
 
 // ============ 强制清除浏览器缓存的重定向 ============
 // 访问 /new 或 /v2 时重定向到首页并附带唯一参数，强制浏览器加载最新内容
-app.get(['/new', '/v2', '/v3', '/latest'], function(req, res) {
+// /pay 是虎皮椒支付开通后的新永久入口（2026-08-19）
+// /forever 是虎皮椒支付正式上线后的永久性网址（2026-08-20）
+app.get(['/new', '/v2', '/v3', '/latest', '/pay', '/palace', '/gege', '/forever', '/xunhupay', '/pay2026'], function(req, res) {
   var stamp = Date.now();
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
@@ -127,16 +129,47 @@ function migrateOldData() {
 migrateOldData();
 
 function loadUsers() {
+  // 1. 优先从持久化目录加载
   try {
     if (fs.existsSync(USERS_FILE)) {
       let content = fs.readFileSync(USERS_FILE, 'utf8');
-      // 移除 BOM 头
       if (content.charCodeAt(0) === 0xFEFF) {
         content = content.substring(1);
       }
-      return JSON.parse(content);
+      const users = JSON.parse(content);
+      const count = Object.keys(users).length;
+      console.log(`[存储] 从持久化目录加载 ${count} 个用户`);
+      return users;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[存储] 从持久化目录加载失败:', e.message);
+  }
+
+  // 2. Fallback: 从代码目录的 data/users.json 加载（随仓库部署的初始数据）
+  const codeDirUsers = path.join(__dirname, 'data', 'users.json');
+  try {
+    if (fs.existsSync(codeDirUsers)) {
+      let content = fs.readFileSync(codeDirUsers, 'utf8');
+      if (content.charCodeAt(0) === 0xFEFF) {
+        content = content.substring(1);
+      }
+      const users = JSON.parse(content);
+      const count = Object.keys(users).length;
+      console.log(`[存储] 从代码目录加载 ${count} 个用户（初始数据）`);
+      // 复制到持久化目录，避免下次再从代码目录加载
+      try {
+        saveUsers(users);
+        console.log('[存储] 初始数据已复制到持久化目录');
+      } catch (e) {
+        console.warn('[存储] 复制初始数据失败:', e.message);
+      }
+      return users;
+    }
+  } catch (e) {
+    console.warn('[存储] 从代码目录加载失败:', e.message);
+  }
+
+  console.log('[存储] 无用户数据，从空开始');
   return {};
 }
 
@@ -216,6 +249,56 @@ function verifySession(token) {
 
 // ============ 配置管理 ============
 
+// 虎皮椒支付默认凭证（用户已开通，作为fallback确保支付可用）
+const DEFAULT_XUNHUPAY_APPID = '201906186425';
+const DEFAULT_XUNHUPAY_SECRET = '8173df15307b65e6f47fb9d359bcb868';
+const DEFAULT_PUBLIC_URL = 'https://gege-palacee-production.up.railway.app';
+// 旧的码支付凭证（用于检测并自动覆盖）
+const LEGACY_EPAY_PID = '12809';
+const LEGACY_EPAY_SECRET = 'AR80YAas4AobLsPKdQlW';
+
+/**
+ * 强制修复旧的码支付配置，自动切换为虎皮椒凭证
+ * 解决Railway环境变量残留旧值导致支付失败的问题
+ */
+function fixLegacyConfig(config) {
+  let changed = false;
+  // 1. 检测旧的码支付端点(mapay.cc)，覆盖为虎皮椒端点
+  if (!config.mpayEndpoint || config.mpayEndpoint.indexOf('mapay') >= 0) {
+    console.log('[支付] 检测到旧端点(码支付)，自动切换为虎皮椒端点');
+    config.mpayEndpoint = 'https://api.xunhupay.com/payment/do.html';
+    changed = true;
+  }
+  // 2. 检测旧的码支付PID(12809)，覆盖为虎皮椒appid
+  if (config.apiKey === LEGACY_EPAY_PID || (config.apiKey && config.apiKey.length <= 5)) {
+    console.log('[支付] 检测到旧凭证(码支付PID)，自动切换为虎皮椒appid');
+    config.apiKey = DEFAULT_XUNHUPAY_APPID;
+    changed = true;
+  }
+  // 3. 检测旧的码支付SECRET，覆盖为虎皮椒app_secret
+  if (config.apiSecret === LEGACY_EPAY_SECRET || (config.apiSecret && config.apiSecret === 'AR80YAas4AobLsPKdQlW')) {
+    console.log('[支付] 检测到旧凭证(码支付SECRET)，自动切换为虎皮椒app_secret');
+    config.apiSecret = DEFAULT_XUNHUPAY_SECRET;
+    changed = true;
+  }
+  // 4. 强制使用虎皮椒支付平台
+  if (config.payProvider !== 'xunhupay') {
+    console.log('[支付] 强制切换为虎皮椒支付平台');
+    config.payProvider = 'xunhupay';
+    changed = true;
+  }
+  // 5. 如果是虎皮椒支付但mpayType是alipay，切换为wxpay（虎皮椒默认微信）
+  if (config.payProvider === 'xunhupay' && config.mpayType === 'alipay') {
+    console.log('[支付] 虎皮椒默认使用微信支付');
+    config.mpayType = 'wxpay';
+    changed = true;
+  }
+  if (changed) {
+    console.log('[支付] 配置已自动修复为虎皮椒支付');
+  }
+  return config;
+}
+
 function loadConfig() {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
@@ -227,28 +310,33 @@ function loadConfig() {
       if (process.env.MPAY_TYPE) config.mpayType = process.env.MPAY_TYPE;
       if (process.env.PAY_PROVIDER) config.payProvider = process.env.PAY_PROVIDER;
       if (process.env.PUBLIC_URL) config.notifyUrl = process.env.PUBLIC_URL + '/api/payment/notify';
-      // 默认切换为虎皮椒支付平台（码支付已被风控）
+      // 应用默认凭证（如果配置文件中没有或为空）
+      if (!config.apiKey) config.apiKey = DEFAULT_XUNHUPAY_APPID;
+      if (!config.apiSecret) config.apiSecret = DEFAULT_XUNHUPAY_SECRET;
       if (!config.payProvider) config.payProvider = 'xunhupay';
-      if (!config.mpayEndpoint || config.mpayEndpoint.indexOf('mapay.cc') >= 0) {
-        config.mpayEndpoint = 'https://api.xunhupay.com/payment/do.html';
-      }
+      if (!config.notifyUrl) config.notifyUrl = (process.env.PUBLIC_URL || DEFAULT_PUBLIC_URL) + '/api/payment/notify';
+      // 强制修复旧的码支付配置
+      config = fixLegacyConfig(config);
+      console.log('[支付] 配置已加载: provider=' + config.payProvider + ', app_id=' + config.apiKey + ', notify=' + config.notifyUrl);
       return config;
     }
   } catch (e) {}
-  // 环境变量优先（云部署模式）
-  return {
+  // fallback分支：环境变量优先
+  const config = {
     paymentMethod: process.env.PAYMENT_METHOD || 'api',
-    apiKey: process.env.MPAY_API_KEY || '',          // 虎皮椒 app_id
-    apiSecret: process.env.MPAY_API_SECRET || '',    // 虎皮椒 app_secret
+    apiKey: process.env.MPAY_API_KEY || DEFAULT_XUNHUPAY_APPID,
+    apiSecret: process.env.MPAY_API_SECRET || DEFAULT_XUNHUPAY_SECRET,
     qrCodeImage: '',
     callbackUrl: '',
     autoVerify: true,
-    notifyUrl: process.env.PUBLIC_URL ? process.env.PUBLIC_URL + '/api/payment/notify' : '',
-    payProvider: process.env.PAY_PROVIDER || 'xunhupay',                       // xunhupay=虎皮椒, epay=码支付
+    notifyUrl: (process.env.PUBLIC_URL || DEFAULT_PUBLIC_URL) + '/api/payment/notify',
+    payProvider: process.env.PAY_PROVIDER || 'xunhupay',
     mpayEndpoint: process.env.MPAY_ENDPOINT || 'https://api.xunhupay.com/payment/do.html',
-    mpayType: process.env.MPAY_TYPE || 'wxpay',     // wxpay=微信, alipay=支付宝
+    mpayType: process.env.MPAY_TYPE || 'wxpay',
     testMode: false
   };
+  // 强制修复旧的码支付配置
+  return fixLegacyConfig(config);
 }
 
 function saveConfig(config) {
@@ -405,53 +493,47 @@ async function createMPayOrder(order) {
     }
 
     const endpoint = config.mpayEndpoint || 'https://api.xunhupay.com/payment/do.html';
-    const appId = config.apiKey;        // 虎皮椒 app_id
+    const appId = config.apiKey;        // 虎皮椒 appid
     const appSecret = config.apiSecret; // 虎皮椒 app_secret
 
     if (!appId || !appSecret) {
-      console.log('虎皮椒 app_id/app_secret 未设置，使用本地模式');
+      console.log('虎皮椒 appid/app_secret 未设置，使用本地模式');
       return null;
     }
 
     const notifyUrl = config.notifyUrl || `http://localhost:${PORT}/api/payment/notify`;
     const returnUrl = config.notifyUrl || `http://localhost:${PORT}/api/payment/notify`;
 
-    // 当前时间 Y-m-d H:i:s
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-
+    // 虎皮椒API参数（严格按照官方文档：https://www.xunhupay.com/doc/api/pay.html）
     const params = {
       version: '1.1',
-      app_id: appId,
-      trade_type: config.mpayType || 'wxpay',  // wxpay=微信, alipay=支付宝
-      out_trade_no: order.orderNo,
+      appid: appId,                          // 注意：是appid，不是app_id
+      trade_order_id: order.orderNo,          // 注意：是trade_order_id，不是out_trade_no
       total_fee: order.amount.toFixed(2),
       title: order.description || '格格的宫殿-金币充值',
+      time: Math.floor(Date.now() / 1000),    // Unix时间戳（秒），不是格式化日期
       notify_url: notifyUrl,
       return_url: returnUrl,
-      time: timeStr,
       nonce_str: crypto.randomBytes(8).toString('hex')
     };
     params.hash = xunhupaySign(params, appSecret);
 
     console.log('📱 调用虎皮椒API');
-    console.log('  app_id:', appId);
+    console.log('  appid:', appId);
     console.log('  金额:', params.total_fee, '元');
-    console.log('  订单号:', params.out_trade_no);
-    console.log('  支付方式:', params.trade_type);
+    console.log('  订单号:', params.trade_order_id);
+    console.log('  时间戳:', params.time);
 
-    const queryString = Object.keys(params)
-      .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
-      .join('&');
+    // 虎皮椒官方文档要求使用POST JSON方式传参
+    const postBody = JSON.stringify(params);
 
     const response = await httpRequest(endpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Content-Length': Buffer.byteLength(queryString)
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postBody)
       },
-      body: queryString
+      body: postBody
     });
 
     if (!response) {
@@ -474,25 +556,30 @@ async function createMPayOrder(order) {
 
     console.log('虎皮椒API响应:', JSON.stringify(jsonResp).substring(0, 400));
 
-    // 虎皮椒返回：code=0 成功，其他失败
-    if (jsonResp.code === 0 || jsonResp.code === '0') {
-      const data = jsonResp.data || {};
-      const payUrl = data.url || '';            // H5支付链接
-      const qrImageUrl = data.images || '';     // 二维码图片URL（直接可显示）
-      const apiOrderNo = data.order_no || '';   // 虎皮椒订单号
-
-      return {
-        qrCode: qrImageUrl,
-        qrUrl: payUrl,
-        payUrl: payUrl,
-        orderNo: apiOrderNo || order.orderNo,
-        amount: order.amount.toFixed(2),
-        rawData: jsonResp
-      };
-    } else {
-      console.error('虎皮椒返回错误:', jsonResp.msg || jsonResp.errmsg || '未知错误');
+    // 虎皮椒返回：有url字段或url_qrcode字段表示成功，errcode存在表示失败
+    if (jsonResp.errcode) {
+      console.error('虎皮椒返回错误:', jsonResp.errcode, jsonResp.errmsg || '未知错误');
       return null;
     }
+
+    // 成功响应包含：openid(订单id), url(跳转链接), url_qrcode(二维码地址)
+    const payUrl = jsonResp.url || '';           // H5支付跳转链接
+    const qrImageUrl = jsonResp.url_qrcode || ''; // 二维码图片URL（PC端扫码用）
+    const apiOrderNo = jsonResp.openid || '';     // 虎皮椒订单id
+
+    if (!payUrl && !qrImageUrl) {
+      console.error('虎皮椒返回无支付链接:', JSON.stringify(jsonResp));
+      return null;
+    }
+
+    return {
+      qrCode: qrImageUrl,
+      qrUrl: payUrl,
+      payUrl: payUrl,
+      orderNo: apiOrderNo || order.orderNo,
+      amount: order.amount.toFixed(2),
+      rawData: jsonResp
+    };
   } catch (error) {
     console.error('调用虎皮椒API失败:', error.message);
     return null;

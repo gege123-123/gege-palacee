@@ -248,6 +248,11 @@ function verifySession(token) {
 // ============ 配置管理 ============
 
 function loadConfig() {
+  // 虎皮椒支付默认凭证（用户已开通，作为fallback确保支付可用）
+  const DEFAULT_XUNHUPAY_APPID = '201906186425';
+  const DEFAULT_XUNHUPAY_SECRET = '8173df15307b65e6f47fb9d359bcb868';
+  const DEFAULT_PUBLIC_URL = 'https://gege-palacee-production.up.railway.app';
+
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
@@ -263,18 +268,23 @@ function loadConfig() {
       if (!config.mpayEndpoint || config.mpayEndpoint.indexOf('mapay.cc') >= 0) {
         config.mpayEndpoint = 'https://api.xunhupay.com/payment/do.html';
       }
+      // 应用默认凭证（如果配置文件中没有或为空）
+      if (!config.apiKey) config.apiKey = process.env.MPAY_API_KEY || DEFAULT_XUNHUPAY_APPID;
+      if (!config.apiSecret) config.apiSecret = process.env.MPAY_API_SECRET || DEFAULT_XUNHUPAY_SECRET;
+      if (!config.notifyUrl) config.notifyUrl = (process.env.PUBLIC_URL || DEFAULT_PUBLIC_URL) + '/api/payment/notify';
+      console.log('[支付] 配置已加载: provider=' + config.payProvider + ', app_id=' + config.apiKey + ', notify=' + config.notifyUrl);
       return config;
     }
   } catch (e) {}
   // 环境变量优先（云部署模式）
   return {
     paymentMethod: process.env.PAYMENT_METHOD || 'api',
-    apiKey: process.env.MPAY_API_KEY || '',          // 虎皮椒 app_id
-    apiSecret: process.env.MPAY_API_SECRET || '',    // 虎皮椒 app_secret
+    apiKey: process.env.MPAY_API_KEY || DEFAULT_XUNHUPAY_APPID,          // 虎皮椒 app_id
+    apiSecret: process.env.MPAY_API_SECRET || DEFAULT_XUNHUPAY_SECRET,    // 虎皮椒 app_secret
     qrCodeImage: '',
     callbackUrl: '',
     autoVerify: true,
-    notifyUrl: process.env.PUBLIC_URL ? process.env.PUBLIC_URL + '/api/payment/notify' : '',
+    notifyUrl: (process.env.PUBLIC_URL || DEFAULT_PUBLIC_URL) + '/api/payment/notify',
     payProvider: process.env.PAY_PROVIDER || 'xunhupay',                       // xunhupay=虎皮椒, epay=码支付
     mpayEndpoint: process.env.MPAY_ENDPOINT || 'https://api.xunhupay.com/payment/do.html',
     mpayType: process.env.MPAY_TYPE || 'wxpay',     // wxpay=微信, alipay=支付宝

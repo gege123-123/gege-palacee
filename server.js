@@ -57,9 +57,10 @@ app.get(['/new', '/v2', '/v3', '/latest', '/pay', '/palace', '/gege', '/forever'
 });
 
 // ============ 支付中转页面 ============
-// 解决微信浏览器拦截JS自动跳转的问题
-// 微信浏览器内：直接显示虎皮椒微信支付二维码，用户长按识别即可支付（不跳转虎皮椒H5页）
-// 非微信浏览器：自动跳转到虎皮椒H5支付页面
+// 所有移动端（微信/非微信）：直接显示虎皮椒微信支付二维码
+//   - 微信内：长按二维码 → 识别图中二维码 → 直接支付
+//   - 非微信手机浏览器：显示二维码 → 截图保存或用微信扫一扫相册 → 支付
+// PC端：跳转到虎皮椒H5支付页（可扫码或跳转）
 app.get('/pay-jump', function(req, res) {
   var orderNo = req.query.orderNo || '';
   var payLink = req.query.payLink || '';      // 虎皮椒H5跳转链接
@@ -96,10 +97,13 @@ app.get('/pay-jump', function(req, res) {
   html += '.qr-box img{width:200px;height:200px;display:block;}';
   html += '.pay-btn{display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:30px;text-decoration:none;font-weight:bold;font-size:16px;margin:15px 0;box-shadow:0 4px 15px rgba(255,215,0,0.4);transition:transform 0.2s;}';
   html += '.pay-btn:active{transform:scale(0.95);}';
+  html += '.save-btn{display:inline-block;padding:10px 24px;background:rgba(255,215,0,0.15);border:1px solid rgba(255,215,0,0.4);color:#FFD700;border-radius:20px;text-decoration:none;font-size:14px;margin:8px 5px;}';
   html += '.loading{display:inline-block;width:20px;height:20px;border:2px solid rgba(255,215,0,0.3);border-top-color:#FFD700;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:8px;vertical-align:middle;}';
   html += '@keyframes spin{to{transform:rotate(360deg);}}';
   html += '.tip{font-size:13px;color:#FFD700;opacity:0.9;margin-top:12px;line-height:1.6;padding:0 10px;}';
   html += '.tip-green{color:#4ADE80;}';
+  html += '.tip-blue{color:#60A5FA;}';
+  html += '.divider{width:80%;height:1px;background:rgba(255,215,0,0.2);margin:15px auto;}';
   html += '.auto-jump{font-size:12px;color:#888;margin-top:15px;}';
   html += '</style></head><body>';
   html += '<div class="container">';
@@ -112,46 +116,69 @@ app.get('/pay-jump', function(req, res) {
   html += '<p>订单号：' + orderNo + '</p>';
   html += '</div>';
 
-  // ====== 微信浏览器内：直接显示二维码，用户长按识别支付 ======
-  html += '<div id="wechatView">';
+  // ====== 移动端视图：显示二维码（微信+非微信手机通用） ======
+  html += '<div id="mobileView">';
   if (safeQrImgUrl) {
     html += '<div class="qr-box">';
-    html += '<img src="' + safeQrImgUrl + '" alt="微信支付二维码" id="qrImg">';
+    html += '<img src="' + safeQrImgUrl + '" alt="微信支付二维码" id="qrImg" style="-webkit-user-drag:none;user-select:none;-webkit-touch-callout:default;">';
     html += '</div>';
+    html += '<div id="weixinTip" style="display:none;">';
     html += '<div class="tip tip-green">💡 请长按上方二维码<br>选择"识别图中二维码"完成支付</div>';
+    html += '</div>';
+    html += '<div id="otherBrowserTip" style="display:none;">';
+    html += '<div class="tip tip-blue">📱 请使用微信扫码支付：</div>';
+    // 非微信浏览器：提供保存二维码按钮+跳转微信按钮
+    html += '<div>';
+    html += '<a href="' + payLink + '" class="save-btn" id="jumpWxBtn">🔗 跳转微信</a>';
+    html += '<a href="' + safeQrImgUrl + '" download="wechat-pay.png" class="save-btn">💾 保存二维码</a>';
+    html += '</div>';
+    html += '<div class="tip tip-blue">保存后打开微信 → 扫一扫 → 右上角··· → 从相册选图 → 付款</div>';
+    html += '</div>';
   } else {
-    // 如果没有二维码URL，降级为跳转按钮
     html += '<a href="' + payLink + '" class="pay-btn">📱 点击前往微信支付</a>';
-    html += '<div class="tip">⚠ 微信内无法跳转请点击右上角"···"<br>选择"在浏览器中打开"</div>';
   }
   html += '</div>';
 
-  // ====== 非微信浏览器：跳转按钮 + 自动跳转 ======
-  html += '<div id="otherView" style="display:none;">';
-  html += '<a href="' + payLink + '" id="payBtn" class="pay-btn">📱 立即前往微信支付</a>';
+  // ====== PC端视图：跳转按钮 + 自动跳转 ======
+  html += '<div id="pcView" style="display:none;">';
+  html += '<a href="' + payLink + '" id="payBtn" class="pay-btn">🔗 前往微信支付页面</a>';
   html += '<div class="auto-jump" id="autoJump"><span class="loading"></span>正在自动跳转...</div>';
+  html += '<div class="tip">或用手机微信扫描上方二维码直接支付</div>';
   html += '</div>';
 
   html += '</div>';
   html += '<script>';
   html += '(function(){';
-  html += 'var isWeixin=/MicroMessenger/i.test(navigator.userAgent);';
+  html += 'var ua=navigator.userAgent;';
+  html += 'var isMobile=/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);';
+  html += 'var isWeixin=/MicroMessenger/i.test(ua);';
   html += 'var payLink="' + payLink + '";';
-  html += 'var wechatView=document.getElementById("wechatView");';
-  html += 'var otherView=document.getElementById("otherView");';
+  html += 'var mobileView=document.getElementById("mobileView");';
+  html += 'var pcView=document.getElementById("pcView");';
+  html += 'var weixinTip=document.getElementById("weixinTip");';
+  html += 'var otherBrowserTip=document.getElementById("otherBrowserTip");';
   html += 'var autoJump=document.getElementById("autoJump");';
+  html += 'if(isMobile){';
+  // ------- 手机端：显示二维码视图 -------
+  html += 'mobileView.style.display="block";pcView.style.display="none";';
   html += 'if(isWeixin){';
-  // 微信浏览器：显示二维码视图，隐藏跳转视图
-  html += 'wechatView.style.display="block";otherView.style.display="none";';
-  // 长按提示：3秒后闪烁提示
-  html += 'setTimeout(function(){var img=document.getElementById("qrImg");if(img){img.style.transition="transform 0.3s";var n=0;setInterval(function(){n++;img.style.transform="scale("+(n%2===0?1:1.03)+")";},1500);}},3000);';
+  // 微信浏览器：显示长按识别提示
+  html += 'if(weixinTip)weixinTip.style.display="block";';
+  html += 'if(otherBrowserTip)otherBrowserTip.style.display="none";';
+  // 二维码轻微浮动动画提示长按
+  html += 'setTimeout(function(){var img=document.getElementById("qrImg");if(img){img.style.transition="transform 0.3s";var n=0;setInterval(function(){n++;img.style.transform="scale("+(n%2===0?1:1.03)+")";},1500);}},2000);';
   html += '}else{';
-  // 非微信浏览器：隐藏二维码视图，显示跳转按钮并自动跳转
-  html += 'wechatView.style.display="none";otherView.style.display="block";';
+  // 非微信手机浏览器：显示保存二维码+跳转微信按钮
+  html += 'if(weixinTip)weixinTip.style.display="none";';
+  html += 'if(otherBrowserTip)otherBrowserTip.style.display="block";';
+  html += '}';
+  html += '}else{';
+  // ------- PC端：跳转虎皮椒H5页面（或二维码） -------
+  html += 'mobileView.style.display="none";pcView.style.display="block";';
   html += 'setTimeout(function(){';
   html += 'try{window.location.href=payLink;}catch(e){';
   html += 'autoJump.innerHTML="自动跳转失败，请点击上方按钮";';
-  html += '}},600);';
+  html += '}},500);';
   html += '}';
   html += '})();';
   html += '</script></body></html>';

@@ -1709,8 +1709,17 @@ function toggleVerifyMode() {
 
 // ============ 管理员登录/登出 ============
 function showAdminLogin() {
+  // 先关闭普通用户登录弹窗，避免遮挡
+  var userModal = document.getElementById('userLoginModal');
+  if (userModal) {
+    userModal.style.display = 'none';
+  }
   var modal = document.getElementById('adminLoginModal');
-  if (modal) modal.classList.add('active');
+  if (modal) {
+    modal.classList.add('active');
+    // 确保管理员弹窗层级最高
+    modal.style.zIndex = '2000';
+  }
 }
 
 function closeAdminLogin() {

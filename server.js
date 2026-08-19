@@ -58,10 +58,13 @@ app.get(['/new', '/v2', '/v3', '/latest', '/pay', '/palace', '/gege', '/forever'
 
 // ============ 支付中转页面 ============
 // 解决微信浏览器拦截JS自动跳转的问题
-// 用户点击支付按钮 → 跳转到同源 /pay-jump 页面 → 中转页面加载后自动跳转到虎皮椒支付链接
+// 微信浏览器内：直接显示虎皮椒微信支付二维码，用户长按识别即可支付（不跳转虎皮椒H5页）
+// 非微信浏览器：自动跳转到虎皮椒H5支付页面
 app.get('/pay-jump', function(req, res) {
   var orderNo = req.query.orderNo || '';
-  var payLink = req.query.payLink || '';
+  var payLink = req.query.payLink || '';      // 虎皮椒H5跳转链接
+  var qrImgUrl = req.query.qrImgUrl || '';    // 虎皮椒微信支付二维码图片URL
+  var amount = req.query.amount || '';        // 金额
 
   // 安全检查：只允许虎皮椒支付链接
   if (!payLink || payLink.indexOf('xunhupay.com') < 0) {
@@ -73,51 +76,82 @@ app.get('/pay-jump', function(req, res) {
   res.setHeader('Expires', '0');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
 
+  // 二维码安全检查：只允许虎皮椒二维码
+  var safeQrImgUrl = (qrImgUrl && qrImgUrl.indexOf('xunhupay.com') >= 0) ? qrImgUrl : '';
+
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">';
-  html += '<title>正在前往微信支付...</title>';
+  html += '<title>格格的宫殿 · 微信支付</title>';
   html += '<style>';
   html += '*{margin:0;padding:0;box-sizing:border-box;}';
   html += 'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#1a0f0a,#3d2817);min-height:100vh;display:flex;align-items:center;justify-content:center;color:#FFD700;padding:20px;}';
   html += '.container{text-align:center;max-width:400px;width:100%;}';
-  html += '.palace-icon{font-size:60px;margin-bottom:20px;animation:bounce 1s infinite;}';
+  html += '.palace-icon{font-size:50px;margin-bottom:15px;animation:bounce 1s infinite;}';
   html += '@keyframes bounce{0%,100%{transform:scale(1);}50%{transform:scale(1.1);}}';
-  html += '.title{font-size:22px;font-weight:bold;margin-bottom:15px;color:#FFD700;text-shadow:0 2px 4px rgba(0,0,0,0.5);}';
-  html += '.order-info{background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.3);border-radius:12px;padding:15px;margin:15px 0;}';
-  html += '.order-info p{margin:5px 0;font-size:14px;color:#FFF;}';
-  html += '.pay-btn{display:inline-block;padding:16px 40px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:30px;text-decoration:none;font-weight:bold;font-size:18px;margin:20px 0;box-shadow:0 4px 15px rgba(255,215,0,0.4);transition:transform 0.2s;}';
+  html += '.title{font-size:20px;font-weight:bold;margin-bottom:12px;color:#FFD700;text-shadow:0 2px 4px rgba(0,0,0,0.5);}';
+  html += '.amount{font-size:42px;font-weight:bold;color:#FFD700;margin:10px 0;text-shadow:0 2px 8px rgba(255,215,0,0.5);}';
+  html += '.amount span{font-size:20px;opacity:0.7;}';
+  html += '.order-info{background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.3);border-radius:12px;padding:12px;margin:12px 0;}';
+  html += '.order-info p{margin:4px 0;font-size:13px;color:#FFF;}';
+  html += '.qr-box{background:#fff;padding:15px;border-radius:16px;margin:15px auto;display:inline-block;box-shadow:0 6px 20px rgba(0,0,0,0.4);}';
+  html += '.qr-box img{width:200px;height:200px;display:block;}';
+  html += '.pay-btn{display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:30px;text-decoration:none;font-weight:bold;font-size:16px;margin:15px 0;box-shadow:0 4px 15px rgba(255,215,0,0.4);transition:transform 0.2s;}';
   html += '.pay-btn:active{transform:scale(0.95);}';
   html += '.loading{display:inline-block;width:20px;height:20px;border:2px solid rgba(255,215,0,0.3);border-top-color:#FFD700;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:8px;vertical-align:middle;}';
   html += '@keyframes spin{to{transform:rotate(360deg);}}';
-  html += '.tip{font-size:13px;color:#FFD700;opacity:0.8;margin-top:15px;line-height:1.6;}';
-  html += '.wechat-tip{background:rgba(231,76,60,0.15);border:1px solid rgba(231,76,60,0.4);border-radius:8px;padding:12px;margin-top:15px;font-size:13px;color:#ff6b6b;}';
-  html += '.auto-jump{font-size:12px;color:#888;margin-top:20px;}';
+  html += '.tip{font-size:13px;color:#FFD700;opacity:0.9;margin-top:12px;line-height:1.6;padding:0 10px;}';
+  html += '.tip-green{color:#4ADE80;}';
+  html += '.auto-jump{font-size:12px;color:#888;margin-top:15px;}';
   html += '</style></head><body>';
   html += '<div class="container">';
   html += '<div class="palace-icon">🐉</div>';
   html += '<div class="title">格格的宫殿 · 微信支付</div>';
+  if (amount) {
+    html += '<div class="amount">¥' + amount + '</div>';
+  }
   html += '<div class="order-info">';
   html += '<p>订单号：' + orderNo + '</p>';
-  html += '<p>请点击下方按钮完成支付</p>';
   html += '</div>';
-  // 关键：使用真实的<a>标签，href指向虎皮椒支付链接，用户主动点击不会被拦截
+
+  // ====== 微信浏览器内：直接显示二维码，用户长按识别支付 ======
+  html += '<div id="wechatView">';
+  if (safeQrImgUrl) {
+    html += '<div class="qr-box">';
+    html += '<img src="' + safeQrImgUrl + '" alt="微信支付二维码" id="qrImg">';
+    html += '</div>';
+    html += '<div class="tip tip-green">💡 请长按上方二维码<br>选择"识别图中二维码"完成支付</div>';
+  } else {
+    // 如果没有二维码URL，降级为跳转按钮
+    html += '<a href="' + payLink + '" class="pay-btn">📱 点击前往微信支付</a>';
+    html += '<div class="tip">⚠ 微信内无法跳转请点击右上角"···"<br>选择"在浏览器中打开"</div>';
+  }
+  html += '</div>';
+
+  // ====== 非微信浏览器：跳转按钮 + 自动跳转 ======
+  html += '<div id="otherView" style="display:none;">';
   html += '<a href="' + payLink + '" id="payBtn" class="pay-btn">📱 立即前往微信支付</a>';
-  html += '<div class="wechat-tip" id="wechatTip" style="display:none;">⚠ 微信浏览器内可能无法自动跳转<br>请点击上方按钮，或点击右上角"···"选择"在浏览器中打开"</div>';
   html += '<div class="auto-jump" id="autoJump"><span class="loading"></span>正在自动跳转...</div>';
+  html += '</div>';
+
   html += '</div>';
   html += '<script>';
   html += '(function(){';
   html += 'var isWeixin=/MicroMessenger/i.test(navigator.userAgent);';
   html += 'var payLink="' + payLink + '";';
-  html += 'var payBtn=document.getElementById("payBtn");';
-  html += 'var wechatTip=document.getElementById("wechatTip");';
+  html += 'var wechatView=document.getElementById("wechatView");';
+  html += 'var otherView=document.getElementById("otherView");';
   html += 'var autoJump=document.getElementById("autoJump");';
-  html += 'if(isWeixin){wechatTip.style.display="block";autoJump.style.display="none";}';
-  html += 'else{';
-  // 非微信浏览器：自动跳转
+  html += 'if(isWeixin){';
+  // 微信浏览器：显示二维码视图，隐藏跳转视图
+  html += 'wechatView.style.display="block";otherView.style.display="none";';
+  // 长按提示：3秒后闪烁提示
+  html += 'setTimeout(function(){var img=document.getElementById("qrImg");if(img){img.style.transition="transform 0.3s";var n=0;setInterval(function(){n++;img.style.transform="scale("+(n%2===0?1:1.03)+")";},1500);}},3000);';
+  html += '}else{';
+  // 非微信浏览器：隐藏二维码视图，显示跳转按钮并自动跳转
+  html += 'wechatView.style.display="none";otherView.style.display="block";';
   html += 'setTimeout(function(){';
   html += 'try{window.location.href=payLink;}catch(e){';
   html += 'autoJump.innerHTML="自动跳转失败，请点击上方按钮";';
-  html += '}},800);';
+  html += '}},600);';
   html += '}';
   html += '})();';
   html += '</script></body></html>';

@@ -1138,24 +1138,31 @@ async function generateRechargeQR() {
           var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
           var isWeixin = /MicroMessenger/i.test(navigator.userAgent);
           var payLink = result.qrUrl || result.payUrl || result.redirectUrl || '';
+          var qrImgUrl = result.qrCode || ''; // 虎皮椒返回的二维码图片HTTP URL
           // 构造同源中转页面URL（解决微信浏览器拦截外部链接的问题）
-          var jumpUrl = '/pay-jump?orderNo=' + encodeURIComponent(result.orderNo || '') + '&payLink=' + encodeURIComponent(payLink);
+          // 微信浏览器内中转页面直接显示二维码，让用户长按识别支付（不跳转虎皮椒H5）
+          var jumpUrl = '/pay-jump?orderNo=' + encodeURIComponent(result.orderNo || '') 
+            + '&payLink=' + encodeURIComponent(payLink)
+            + '&qrImgUrl=' + encodeURIComponent(qrImgUrl)
+            + '&amount=' + encodeURIComponent(String(price));
           
           if (rechargePayQr) {
             var html = '';
             
-            // 显示二维码图片（如果有，且非微信浏览器 - 微信内不显示二维码）
-            if (result.qrCode && !isWeixin) {
+            // PC端：显示二维码
+            if (!isMobile && result.qrCode) {
               html += '<img src="' + result.qrCode + '" alt="付款二维码" style="max-width:220px;max-height:220px;border-radius:12px;border:3px solid #FFD700;display:block;margin:0 auto;">';
             }
             
             // 跳转按钮 - 使用<a>标签直接指向同源中转页面，浏览器不会拦截同源跳转
             if (isMobile) {
               html += '<div style="margin-top:15px;text-align:center;">';
-              html += '<a href="' + jumpUrl + '" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:25px;text-decoration:none;font-weight:bold;font-size:16px;box-shadow:0 4px 12px rgba(255,215,0,0.4);">📱 点击前往' + payTypeName + '支付 ¥' + price + '</a>';
               if (isWeixin) {
-                html += '<p style="margin-top:12px;font-size:13px;color:#FFD700;line-height:1.6;">⚠ 微信内打开后，请点击上方按钮<br>若仍无法跳转，请点击右上角"···"选择"在浏览器中打开"</p>';
+                // 微信内：点击后进入中转页面，直接显示二维码长按识别
+                html += '<a href="' + jumpUrl + '" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:25px;text-decoration:none;font-weight:bold;font-size:16px;box-shadow:0 4px 12px rgba(255,215,0,0.4);">📱 点击进入微信支付 ¥' + price + '</a>';
+                html += '<p style="margin-top:12px;font-size:13px;color:#4ADE80;line-height:1.6;">✅ 进入后长按二维码即可完成支付</p>';
               } else {
+                html += '<a href="' + jumpUrl + '" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:25px;text-decoration:none;font-weight:bold;font-size:16px;box-shadow:0 4px 12px rgba(255,215,0,0.4);">📱 点击前往' + payTypeName + '支付 ¥' + price + '</a>';
                 html += '<p style="margin-top:10px;font-size:12px;color:#888;">点击按钮将自动跳转到' + payTypeName + '支付页面</p>';
               }
               html += '</div>';

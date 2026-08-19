@@ -1,1 +1,510 @@
-[{"username":"瓜尔佳格格","password":"123456","servantName":"下作的瓜尔佳贱婢","gold":0,"totalTributed":0,"kneelCount":0,"createdAt":1786683138474}]
+{
+  "testfinal": {
+    "username": "testfinal",
+    "password": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "servantName": "testfinal",
+    "gold": 100,
+    "totalTributed": 100,
+    "kneelCount": 0,
+    "tributes": [],
+    "createdAt": "2026-08-11T08:11:09.224Z",
+    "rechargeHistory": [
+      {
+        "amount": 100,
+        "reason": "格格恩赐",
+        "rechargedAt": "2026-08-12T08:42:17.063Z"
+      }
+    ]
+  },
+  "格格的奴才": {
+    "username": "格格的奴才",
+    "password": "ef797c8118f02dfb649607dd5d3f8c7623048c9c063d532cc95c5ed7a898a64f",
+    "servantName": "格格的奴才",
+    "gold": 3165,
+    "totalTributed": 17119,
+    "kneelCount": 49,
+    "tributes": [
+      {
+        "type": "ring",
+        "name": "钻戒",
+        "cost": 520,
+        "timestamp": "2026-08-11T08:17:48.826Z"
+      },
+      {
+        "type": "palace",
+        "name": "府邸",
+        "cost": 9999,
+        "timestamp": "2026-08-11T08:17:51.775Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T08:52:05.330Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T08:52:05.521Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T08:52:05.697Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:52:06.087Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:52:06.283Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:52:06.486Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T08:52:08.576Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T08:52:08.845Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T08:52:09.034Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:52:09.386Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:52:09.579Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T10:12:59.443Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T10:13:00.176Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T10:13:00.779Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T16:13:18.854Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T16:13:19.291Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T16:13:19.524Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T16:13:19.724Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T16:13:19.918Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T16:13:20.120Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T17:30:08.305Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T17:30:42.701Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T17:30:42.893Z"
+      }
+    ],
+    "createdAt": "2026-08-11T08:15:05.586Z",
+    "rechargeHistory": [
+      {
+        "amount": 5000,
+        "reason": "格格恩赐",
+        "rechargedAt": "2026-08-12T10:04:20.109Z"
+      }
+    ]
+  },
+  "我是狗奴才": {
+    "username": "我是狗奴才",
+    "password": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "servantName": "我是狗奴才",
+    "gold": 475,
+    "totalTributed": 9580,
+    "kneelCount": 148,
+    "tributes": [
+      {
+        "type": "work",
+        "name": "乞讨费",
+        "cost": 50,
+        "timestamp": "2026-08-12T08:47:23.620Z"
+      },
+      {
+        "type": "work",
+        "name": "乞讨费",
+        "cost": 50,
+        "timestamp": "2026-08-12T08:47:29.481Z"
+      },
+      {
+        "type": "ring",
+        "name": "卖身契",
+        "cost": 520,
+        "timestamp": "2026-08-12T08:47:32.510Z"
+      },
+      {
+        "type": "ring",
+        "name": "卖身契",
+        "cost": 520,
+        "timestamp": "2026-08-12T10:06:11.114Z"
+      },
+      {
+        "type": "ring",
+        "name": "卖身契",
+        "cost": 520,
+        "timestamp": "2026-08-12T10:06:16.834Z"
+      },
+      {
+        "type": "work",
+        "name": "乞讨费",
+        "cost": 50,
+        "timestamp": "2026-08-13T01:47:34.391Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T06:04:50.946Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T06:04:51.485Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T06:04:51.930Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T06:04:52.363Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T06:18:52.890Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T06:18:53.282Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T06:18:53.467Z"
+      },
+      {
+        "type": "ring",
+        "name": "钻戒",
+        "cost": 520,
+        "timestamp": "2026-08-14T07:27:04.146Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T07:48:46.926Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T07:48:47.134Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T07:48:47.339Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T07:48:47.524Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T07:48:47.709Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T07:48:47.894Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T07:48:48.079Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T07:48:48.261Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T07:48:48.449Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:08:15.622Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:08:16.912Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T08:08:36.153Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T08:08:46.455Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T08:08:47.806Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T08:10:43.246Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T08:30:17.837Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:30:20.091Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:30:20.276Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T08:33:32.667Z"
+      },
+      {
+        "type": "work",
+        "name": "打工费",
+        "cost": 50,
+        "timestamp": "2026-08-14T08:33:43.007Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:33:43.452Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:33:43.716Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:33:43.927Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:33:44.876Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T08:33:46.219Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T17:28:31.185Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T17:28:31.449Z"
+      },
+      {
+        "type": "gold",
+        "name": "血汗",
+        "cost": 100,
+        "timestamp": "2026-08-14T17:28:31.637Z"
+      }
+    ],
+    "createdAt": "2026-08-12T08:45:37.786Z",
+    "rechargeHistory": [
+      {
+        "amount": 5000,
+        "reason": "格格恩赐",
+        "rechargedAt": "2026-08-12T10:04:40.806Z"
+      }
+    ]
+  },
+  "testalbum": {
+    "username": "testalbum",
+    "password": "937e8d5fbb48bd4949536cd65b8d35c426b80d2f830c5c308e2cdec422ae2244",
+    "servantName": "testalbum",
+    "gold": 480,
+    "totalTributed": 1520,
+    "kneelCount": 0,
+    "tributes": [],
+    "createdAt": "2026-08-12T08:58:48.775Z",
+    "rechargeHistory": [
+      {
+        "amount": 1000,
+        "reason": "测试充值",
+        "rechargedAt": "2026-08-12T08:58:57.301Z"
+      }
+    ],
+    "albumHistory": {
+      "1": {
+        "unlockedAt": "2026-08-12T08:59:06.621Z",
+        "cost": 520
+      }
+    }
+  },
+  "testuser": {
+    "username": "testuser",
+    "password": "937e8d5fbb48bd4949536cd65b8d35c426b80d2f830c5c308e2cdec422ae2244",
+    "servantName": "testuser",
+    "gold": 115,
+    "totalTributed": 0,
+    "kneelCount": 0,
+    "tributes": [],
+    "createdAt": "2026-08-14T09:37:28.296Z"
+  },
+  "test_fix_002": {
+    "username": "test_fix_002",
+    "password": "937e8d5fbb48bd4949536cd65b8d35c426b80d2f830c5c308e2cdec422ae2244",
+    "servantName": "test_fix_002",
+    "gold": 0,
+    "totalTributed": 0,
+    "kneelCount": 0,
+    "tributes": [],
+    "createdAt": "2026-08-17T03:23:39.135Z"
+  },
+  "瓜尔佳格格": {
+    "username": "瓜尔佳格格",
+    "password": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "servantName": "瓜尔佳格格",
+    "gold": 0,
+    "totalTributed": 0,
+    "kneelCount": 26,
+    "tributes": [],
+    "createdAt": "2026-08-18T04:42:02.133Z"
+  }
+}

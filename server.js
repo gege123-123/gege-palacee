@@ -821,7 +821,7 @@ async function queryMPayOrder(orderNo) {
     // 查询接口地址（虎皮椒固定地址）
     const queryEndpoint = 'https://api.xunhupay.com/payment/query.html';
 
-    // 本地订单号优先（虎皮椒查询用商户订单号 out_trade_no）
+    // 本地订单号优先
     // 先直接查找，找不到就按 apiOrderNo 字段搜索
     let localOrder = orders.get(orderNo);
     if (!localOrder) {
@@ -833,22 +833,29 @@ async function queryMPayOrder(orderNo) {
         }
       }
     }
-    const outTradeNo = localOrder ? localOrder.orderNo : orderNo;
 
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-
+    // 虎皮椒查询接口参数（根据官方文档）：
+    // out_trade_order 和 open_order_id 二选一
+    // time 为Unix时间戳（秒）
     const params = {
       version: '1.1',
-      appid: appId,            // 虎皮椒查询接口参数名是appid（与创建订单一致）
-      out_trade_no: outTradeNo, // 商户订单号（创建订单时传的trade_order_id）
-      time: timeStr,
+      appid: appId,
+      time: Math.floor(Date.now() / 1000),  // Unix时间戳（秒）
       nonce_str: crypto.randomBytes(8).toString('hex')
     };
+
+    // 优先用 open_order_id（虎皮椒内部订单号），更可靠
+    if (localOrder && localOrder.apiOrderNo) {
+      params.open_order_id = String(localOrder.apiOrderNo);
+    } else if (localOrder && localOrder.orderNo) {
+      params.out_trade_order = localOrder.orderNo;
+    } else {
+      params.out_trade_order = orderNo;
+    }
+
     params.hash = xunhupaySign(params, appSecret);
 
-    // 虎皮椒查询接口用JSON方式传参（与创建订单一致）
+    // 虎皮椒查询接口用JSON方式传参
     const postBody = JSON.stringify(params);
 
     const result = await httpRequest(queryEndpoint, {
@@ -875,15 +882,16 @@ async function queryMPayOrder(orderNo) {
 
     console.log('虎皮椒查询响应:', JSON.stringify(jsonResp).substring(0, 300));
 
-    // 转换为统一格式，方便上层判断
-    // 上层代码统一看 status 字段：1=已支付
-    if (jsonResp.code === 0 || jsonResp.code === '0') {
+    // 虎皮椒查询返回 errcode=0 表示请求成功
+    // data.status: OD=支付成功, WP=待支付, CD=已取消
+    if (jsonResp.errcode === 0 || jsonResp.errcode === '0') {
       const data = jsonResp.data || {};
+      const isPaid = data.status === 'OD' || data.status === 'od';
       return {
         code: 1,
-        status: data.status === true || data.status === 'true' || data.status === 1 || data.status === 'OK' ? 1 : 0,
-        pay_status: data.status === true || data.status === 'true' || data.status === 1 || data.status === 'OK' ? 1 : 0,
-        msg: '查询成功',
+        status: isPaid ? 1 : 0,
+        pay_status: isPaid ? 1 : 0,
+        msg: '查询成功: ' + (data.status || 'unknown'),
         rawData: jsonResp
       };
     } else {
@@ -891,7 +899,7 @@ async function queryMPayOrder(orderNo) {
         code: 0,
         status: 0,
         pay_status: 0,
-        msg: jsonResp.msg || jsonResp.errmsg || '查询失败',
+        msg: jsonResp.errmsg || '查询失败',
         rawData: jsonResp
       };
     }

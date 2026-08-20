@@ -223,9 +223,10 @@ async function apiRequest(endpoint, options) {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache'
     };
-    // 如果有token则添加认证头
-    if (state.userToken) {
-      headers['Authorization'] = 'Bearer ' + state.userToken;
+    // 如果有token则添加认证头（多源兜底：state.userToken / localStorage.authToken / localStorage.userToken）
+    var token = state.userToken || localStorage.getItem('authToken') || localStorage.getItem('userToken');
+    if (token) {
+      headers['Authorization'] = 'Bearer ' + token;
     }
     var url = API_BASE + endpoint;
     console.log('API请求:', url, options);
@@ -1040,10 +1041,41 @@ function updateScanPayQR() {
 // ============ 充值付款功能 ============
 var rechargePollingTimer = null;
 
+// 确保支付弹窗内部结构完整（showRechargeSuccessUI会替换，关闭后需要恢复）
+function ensureRechargePayModalStructure() {
+  var modal = document.getElementById('rechargePayModal');
+  if (!modal) return;
+  
+  // 如果找不到内部ID，说明被成功页面替换了，需要重建原始结构
+  if (!document.getElementById('rechargePayQr') || !document.getElementById('rechargePayInfo')) {
+    modal.innerHTML = 
+      '<div class="modal-content recharge-pay-modal">' +
+        '<span class="modal-close" onclick="closeRechargePay()">&times;</span>' +
+        '<h2 class="modal-title">🔍 扫码付款 · 自动验证</h2>' +
+        '<div class="recharge-pay-content">' +
+          '<div class="recharge-pay-amount" id="rechargePayAmount">¥0.00</div>' +
+          '<div class="recharge-pay-gold" id="rechargePayGold">获得 0 金币</div>' +
+          '<div class="recharge-pay-qr" id="rechargePayQr">' +
+            '<div class="pay-qr-loading"><div class="spinner"></div><p>正在生成付款码...</p></div>' +
+          '</div>' +
+          '<div class="recharge-pay-info" id="rechargePayInfo">' +
+            '<p class="pay-info-status">⏳ 等待扫码付款</p>' +
+            '<p class="pay-info-tip">请使用微信/支付宝扫描上方二维码</p>' +
+            '<p class="pay-info-timer">剩余时间：<span id="rechargePayTimer">30:00</span></p>' +
+          '</div>' +
+          '<div class="recharge-pay-hint" id="rechargePayHint" style="display:none;"></div>' +
+        '</div>' +
+      '</div>';
+  }
+}
+
 async function generateRechargeQR() {
   var amount = state.selectedRecharge;
   var price = getRechargePrice(amount);
   var gold = getRechargeGold(amount);
+  
+  // 确保支付弹窗内部关键元素存在（防止成功页面破坏结构后无法恢复）
+  ensureRechargePayModalStructure();
   
   // 检查支付配置
   var config = await checkServerConfig();
@@ -1074,9 +1106,10 @@ async function generateRechargeQR() {
       description: '充值' + gold + '金币'
     };
     
-    // 如果有用户token，直接在body中也传递一份（双重保险）
-    if (state.userToken) {
-      requestBody.token = state.userToken;
+    // 如果有用户token，直接在body中也传递一份（三重保险：state + localStorage + authToken）
+    var userToken = state.userToken || localStorage.getItem('authToken') || localStorage.getItem('userToken');
+    if (userToken) {
+      requestBody.token = userToken;
     }
     
     var result = await apiRequest('/api/order/create', {

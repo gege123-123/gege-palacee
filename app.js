@@ -1158,10 +1158,11 @@ async function generateRechargeQR() {
               html += '</div>';
               html += '<div style="margin-top:12px;font-size:14px;font-weight:bold;color:#FFD700;">💰 支付 ¥' + price + ' 获得 ' + gold + ' 金币</div>';
               if (isWeixin) {
-                html += '<div style="margin-top:10px;font-size:13px;color:#4ADE80;line-height:1.6;">💡 长按上方二维码<br>选择"识别图中二维码"付款</div>';
-                html += '<div style="margin-top:6px;font-size:12px;color:rgba(255,215,0,0.7);">（点图片进入完整支付指引）</div>';
+                html += '<div style="margin-top:10px;font-size:13px;color:#4ADE80;line-height:1.6;">💡 长按上方二维码<br>选择"识别图中二维码"即可支付</div>';
+                html += '<div style="margin-top:6px;font-size:12px;color:rgba(255,215,0,0.7);">✅ 微信内直接支付，无需另一台手机</div>';
               } else {
-                html += '<div style="margin-top:10px;font-size:13px;color:#60A5FA;line-height:1.6;">📱 打开微信 → 扫一扫 → 右上角··· → 从相册选图<br>或点图片进入完整支付指引页</div>';
+                html += '<div style="margin-top:10px;font-size:13px;color:#60A5FA;line-height:1.6;">📱 点击图片进入支付页面<br>复制链接到微信打开即可直接支付</div>';
+                html += '<div style="margin-top:6px;font-size:12px;color:rgba(255,215,0,0.7);">💡 微信内长按二维码识别支付，同一台手机即可</div>';
               }
               html += '</a>';
             } else if (!isMobile && result.qrCode) {

@@ -1134,13 +1134,11 @@ async function generateRechargeQR() {
           }
           
         } else {
-          // 网页链接：同时显示二维码和跳转按钮
+          // 网页链接：显示二维码，明确提示使用另一台手机扫码
           var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-          var isWeixin = /MicroMessenger/i.test(navigator.userAgent);
           var payLink = result.qrUrl || result.payUrl || result.redirectUrl || '';
           var qrImgUrl = result.qrCode || ''; // 虎皮椒返回的二维码图片HTTP URL
-          // 构造同源中转页面URL（解决微信浏览器拦截外部链接的问题）
-          // 微信浏览器内中转页面直接显示二维码，让用户长按识别支付（不跳转虎皮椒H5）
+          // 构造同源中转页面URL（用于更大尺寸显示二维码）
           var jumpUrl = '/pay-jump?orderNo=' + encodeURIComponent(result.orderNo || '') 
             + '&payLink=' + encodeURIComponent(payLink)
             + '&qrImgUrl=' + encodeURIComponent(qrImgUrl)
@@ -1149,35 +1147,25 @@ async function generateRechargeQR() {
           if (rechargePayQr) {
             var html = '';
             
-            // 移动端：直接显示二维码图片（包在<a>里可点击进入完整支付页）
-            // 微信内长按图片可直接识别支付；非微信浏览器点击图片进入完整指引页
-            if (isMobile && result.qrCode) {
-              html += '<a href="' + jumpUrl + '" style="display:block;text-align:center;text-decoration:none;">';
-              html += '<div style="background:#fff;padding:12px;border-radius:14px;display:inline-block;margin-top:10px;border:3px solid #FFD700;">';
-              html += '<img src="' + result.qrCode + '" alt="微信支付二维码" style="width:200px;height:200px;display:block;">';
-              html += '</div>';
-              html += '<div style="margin-top:12px;font-size:14px;font-weight:bold;color:#FFD700;">💰 支付 ¥' + price + ' 获得 ' + gold + ' 金币</div>';
-              if (isWeixin) {
-                html += '<div style="margin-top:10px;font-size:13px;color:#4ADE80;line-height:1.6;">💡 长按上方二维码<br>选择"识别图中二维码"即可支付</div>';
-                html += '<div style="margin-top:6px;font-size:12px;color:rgba(255,215,0,0.7);">✅ 微信内直接支付，无需另一台手机</div>';
+            // 移动端和PC端统一：显示二维码，提示另一台手机扫码
+            if (result.qrCode) {
+              if (isMobile) {
+                html += '<a href="' + jumpUrl + '" style="display:block;text-align:center;text-decoration:none;">';
+                html += '<div style="background:#fff;padding:12px;border-radius:14px;display:inline-block;margin-top:10px;border:3px solid #FFD700;">';
+                html += '<img src="' + result.qrCode + '" alt="微信支付二维码" style="width:200px;height:200px;display:block;">';
+                html += '</div>';
+                html += '<div style="margin-top:12px;font-size:14px;font-weight:bold;color:#FFD700;">💰 支付 ¥' + price + ' 获得 ' + gold + ' 金币</div>';
+                html += '</a>';
               } else {
-                html += '<div style="margin-top:10px;font-size:13px;color:#60A5FA;line-height:1.6;">📱 点击图片进入支付页面<br>复制链接到微信打开即可直接支付</div>';
-                html += '<div style="margin-top:6px;font-size:12px;color:rgba(255,215,0,0.7);">💡 微信内长按二维码识别支付，同一台手机即可</div>';
+                // PC端：显示二维码
+                html += '<img src="' + result.qrCode + '" alt="付款二维码" style="max-width:220px;max-height:220px;border-radius:12px;border:3px solid #FFD700;display:block;margin:0 auto;">';
+                html += '<div style="text-align:center;margin-top:10px;font-size:14px;font-weight:bold;color:#FFD700;">💰 支付 ¥' + price + ' 获得 ' + gold + ' 金币</div>';
               }
-              html += '</a>';
-            } else if (!isMobile && result.qrCode) {
-              // PC端：显示二维码
-              html += '<img src="' + result.qrCode + '" alt="付款二维码" style="max-width:220px;max-height:220px;border-radius:12px;border:3px solid #FFD700;display:block;margin:0 auto;">';
-            }
-            
-            // PC端按钮 + 移动端二维码图下也放一个跳转按钮（备用）
-            if (!isMobile) {
-              // PC端：显示二维码+按钮
-              if (result.qrCode) {
-                html += '<p style="text-align:center;margin-top:10px;font-size:12px;color:#888;">💡 请使用' + payTypeName + '扫描二维码，或点击下方按钮跳转</p>';
-              }
-              html += '<div style="margin-top:10px;text-align:center;">';
-              html += '<a href="' + jumpUrl + '" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:20px;text-decoration:none;font-weight:bold;">🔗 前往' + payTypeName + '支付 ¥' + price + '</a>';
+              
+              // 统一提示：必须使用另一台手机扫码
+              html += '<div style="margin-top:12px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.35);border-radius:10px;padding:12px;margin:12px 8px 0 8px;">';
+              html += '<div style="font-size:14px;font-weight:bold;color:#ff6b6b;text-align:center;line-height:1.6;">⚠️ 请使用另一台手机的微信<br>扫描上方二维码支付</div>';
+              html += '<div style="font-size:12px;color:#FFD700;opacity:0.8;text-align:center;margin-top:6px;line-height:1.5;">本渠道不支持微信内长按识别支付<br>不支持截图/相册识别<br>必须使用另外一台手机扫码</div>';
               html += '</div>';
             }
             
@@ -1190,10 +1178,10 @@ async function generateRechargeQR() {
               : '<p class="pay-info-tip">💡 请先登录以启用自动到账功能</p>';
             
             rechargePayInfo.innerHTML = 
-              '<p class="pay-info-status">⏳ ' + (isMobile ? '点击按钮' : '扫码') + '付款 ¥' + price + ' (获得 ' + gold + ' 金币)</p>' +
+              '<p class="pay-info-status">⏳ 请扫码付款 ¥' + price + ' (获得 ' + gold + ' 金币)</p>' +
               userHintRedirect +
               '<p class="pay-info-timer">剩余时间：<span id="rechargePayTimer">30:00</span></p>' +
-              '<p class="pay-info-note">📱 支付成功后金币将自动充值到账户</p>';
+              '<p class="pay-info-note">📱 请使用另一台手机扫码，支付成功后金币自动到账</p>';
           }
         }
         

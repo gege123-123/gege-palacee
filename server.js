@@ -2094,6 +2094,64 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// 调试接口：直接查询虎皮椒支付状态，返回原始数据
+app.get('/api/debug/query/:orderNo', async (req, res) => {
+  const orderNo = req.params.orderNo;
+  const order = orders.get(orderNo);
+  
+  if (!order) {
+    return res.json({ error: '订单不存在', orderNo: orderNo });
+  }
+  
+  // 用本地orderNo（trade_order_id）直接查虎皮椒
+  const appId = config.apiKey;
+  const appSecret = config.apiSecret;
+  const queryEndpoint = 'https://api.xunhupay.com/payment/query.html';
+  
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  
+  const params = {
+    version: '1.1',
+    appid: appId,
+    out_trade_no: order.orderNo,  // 用本地订单号（创建时传的trade_order_id）
+    time: timeStr,
+    nonce_str: crypto.randomBytes(8).toString('hex')
+  };
+  params.hash = xunhupaySign(params, appSecret);
+  
+  const postBody = JSON.stringify(params);
+  
+  try {
+    const result = await httpRequest(queryEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postBody)
+      },
+      body: postBody
+    });
+    
+    res.json({
+      orderNo: orderNo,
+      localOrderNo: order.orderNo,
+      apiOrderNo: order.apiOrderNo,
+      orderStatus: order.status,
+      orderPaid: order.paid,
+      queryParams: params,
+      rawResponse: result,
+      isPaySuccess: result ? isPaySuccess({
+        code: (result.code === 0 || result.code === '0') ? 1 : 0,
+        status: (result.data && (result.data.status === true || result.data.status === 'true' || result.data.status === 1 || result.data.status === 'OK')) ? 1 : 0,
+        pay_status: (result.data && (result.data.status === true || result.data.status === 'true' || result.data.status === 1 || result.data.status === 'OK')) ? 1 : 0
+      }) : false
+    });
+  } catch (e) {
+    res.json({ error: e.message, orderNo: orderNo, localOrderNo: order ? order.orderNo : null });
+  }
+});
+
 // 实时查询订单支付状态（优化版，用于前端高频轮询）
 app.get('/api/order/:orderNo/status', (req, res) => {
   const orderNo = req.params.orderNo;

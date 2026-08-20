@@ -1343,7 +1343,8 @@ function addUserGold(username, amount, reason) {
 }
 
 // 确认订单已支付（用户手动点击"充值完成"按钮）
-app.post('/api/order/:orderNo/confirm', (req, res) => {
+// 必须先查询虎皮椒支付状态，只有真支付了才加金币
+app.post('/api/order/:orderNo/confirm', async (req, res) => {
   const orderNo = req.params.orderNo;
   const order = orders.get(orderNo);
 
@@ -1356,25 +1357,40 @@ app.post('/api/order/:orderNo/confirm', (req, res) => {
     return res.json({ success: true, message: '订单已支付，金币已到账', alreadyPaid: true });
   }
 
-  // 标记订单为已支付
-  order.status = 'paid';
-  order.paidAt = new Date().toISOString();
-  order.paid = false;
-
-  // 给用户加金币
-  if (order.username && order.goldAmount > 0) {
-    const success = addUserGold(order.username, order.goldAmount, '手动确认充值');
-    order.paid = success;
-    console.log(`✅ 手动确认充值成功: 用户=${order.username}, 金币=+${order.goldAmount}, 订单=${orderNo}`);
-  } else if (!order.username) {
-    order.paid = true;
-    console.log(`⚠️ 手动确认订单无关联用户: ${orderNo}`);
+  // 先查询虎皮椒，验证是否真的支付了
+  const apiOrderNo = order.apiOrderNo || order.orderNo;
+  let payResult = null;
+  try {
+    payResult = await queryMPayOrder(apiOrderNo);
+    console.log(`[手动确认] 查询订单 ${orderNo} 支付状态:`, payResult ? JSON.stringify(payResult).substring(0, 200) : 'null');
+  } catch (e) {
+    console.error('[手动确认] 查询虎皮椒失败:', e.message);
   }
 
-  orders.set(orderNo, order);
-  saveOrders();
+  // 检查是否真的支付成功
+  if (!payResult || !isPaySuccess(payResult)) {
+    return res.json({ 
+      success: false, 
+      message: '未检测到支付记录，请确认已用另一台手机扫码完成支付后再点击',
+      notPaid: true
+    });
+  }
 
-  res.json({ success: true, message: '充值成功，金币已到账', goldAdded: order.goldAmount });
+  // 虎皮椒确认已支付，加金币
+  const success = markOrderAsPaid(orderNo, payResult, '手动确认');
+  
+  if (success) {
+    res.json({ 
+      success: true, 
+      message: '充值成功，金币已到账', 
+      goldAdded: order.goldAmount 
+    });
+  } else {
+    res.json({ 
+      success: false, 
+      message: '充值确认失败，请稍后重试或联系格格' 
+    });
+  }
 });
 
 // 取消订单

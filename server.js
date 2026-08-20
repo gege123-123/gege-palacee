@@ -1370,7 +1370,7 @@ app.post('/api/order/:orderNo/confirm', async (req, res) => {
 
   // 已支付过，不重复加金币
   if (order.paid) {
-    return res.json({ success: true, message: '订单已支付，金币已到账', alreadyPaid: true });
+    return res.json({ success: true, message: '订单已支付，金币已到账', alreadyPaid: true, goldAdded: order.goldAmount });
   }
 
   // 先查询虎皮椒，验证是否真的支付了
@@ -1392,14 +1392,30 @@ app.post('/api/order/:orderNo/confirm', async (req, res) => {
     });
   }
 
-  // 虎皮椒确认已支付，加金币
+  // 虎皮椒确认已支付
+  // 如果订单还没绑定用户，尝试从请求头/body拿token绑定用户
+  if (!order.username) {
+    const headerToken = req.headers.authorization?.replace('Bearer ', '');
+    const bodyToken = req.body && req.body.token;
+    const token = headerToken || bodyToken;
+    if (token) {
+      const user = verifySession(token);
+      if (user) {
+        order.username = user.username;
+        orders.set(orderNo, order);
+        console.log(`[手动确认] 订单${orderNo}绑定用户: ${user.username}`);
+      }
+    }
+  }
+
   const success = markOrderAsPaid(orderNo, payResult, '手动确认');
   
   if (success) {
     res.json({ 
       success: true, 
       message: '充值成功，金币已到账', 
-      goldAdded: order.goldAmount 
+      goldAdded: order.goldAmount,
+      username: order.username
     });
   } else {
     res.json({ 

@@ -2111,35 +2111,50 @@ app.get('/api/debug/query/:orderNo', async (req, res) => {
     return res.json({ error: '订单不存在', orderNo: orderNo });
   }
   
-  // 用本地orderNo（trade_order_id）直接查虎皮椒
+  // 用官方文档参数查询
   const appId = config.apiKey;
   const appSecret = config.apiSecret;
   const queryEndpoint = 'https://api.xunhupay.com/payment/query.html';
   
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-  
-  const params = {
+  // 方式1: 用 open_order_id 查询
+  const params1 = {
     version: '1.1',
     appid: appId,
-    out_trade_no: order.orderNo,  // 用本地订单号（创建时传的trade_order_id）
-    time: timeStr,
+    open_order_id: String(order.apiOrderNo),
+    time: Math.floor(Date.now() / 1000),
     nonce_str: crypto.randomBytes(8).toString('hex')
   };
-  params.hash = xunhupaySign(params, appSecret);
+  params1.hash = xunhupaySign(params1, appSecret);
   
-  const postBody = JSON.stringify(params);
+  // 方式2: 用 out_trade_order 查询
+  const params2 = {
+    version: '1.1',
+    appid: appId,
+    out_trade_order: order.orderNo,
+    time: Math.floor(Date.now() / 1000),
+    nonce_str: crypto.randomBytes(8).toString('hex')
+  };
+  params2.hash = xunhupaySign(params2, appSecret);
   
   try {
-    const result = await httpRequest(queryEndpoint, {
+    // 先用 open_order_id 查
+    const postBody1 = JSON.stringify(params1);
+    const result1 = await httpRequest(queryEndpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postBody)
-      },
-      body: postBody
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postBody1) },
+      body: postBody1
     });
+    
+    // 再用 out_trade_order 查
+    const postBody2 = JSON.stringify(params2);
+    const result2 = await httpRequest(queryEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postBody2) },
+      body: postBody2
+    });
+    
+    // 同时调用正式的queryMPayOrder函数
+    const officialResult = await queryMPayOrder(order.apiOrderNo || order.orderNo);
     
     res.json({
       orderNo: orderNo,
@@ -2147,13 +2162,15 @@ app.get('/api/debug/query/:orderNo', async (req, res) => {
       apiOrderNo: order.apiOrderNo,
       orderStatus: order.status,
       orderPaid: order.paid,
-      queryParams: params,
-      rawResponse: result,
-      isPaySuccess: result ? isPaySuccess({
-        code: (result.code === 0 || result.code === '0') ? 1 : 0,
-        status: (result.data && (result.data.status === true || result.data.status === 'true' || result.data.status === 1 || result.data.status === 'OK')) ? 1 : 0,
-        pay_status: (result.data && (result.data.status === true || result.data.status === 'true' || result.data.status === 1 || result.data.status === 'OK')) ? 1 : 0
-      }) : false
+      queryByOpenOrderId: {
+        params: params1,
+        rawResponse: result1
+      },
+      queryByOutTradeOrder: {
+        params: params2,
+        rawResponse: result2
+      },
+      queryMPayOrderResult: officialResult
     });
   } catch (e) {
     res.json({ error: e.message, orderNo: orderNo, localOrderNo: order ? order.orderNo : null });

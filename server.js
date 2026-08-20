@@ -116,23 +116,42 @@ app.get('/pay-jump', function(req, res) {
   html += '<p>订单号：' + orderNo + '</p>';
   html += '</div>';
 
-  // ====== 移动端视图：显示二维码（微信+非微信手机通用） ======
+  // ====== 移动端视图 ======
+  // 微信浏览器内：显示二维码，长按识别直接拉起微信支付（同一台手机即可完成）
+  // 非微信浏览器：提供"复制链接到微信打开"按钮（在同一台手机上完成支付）
   html += '<div id="mobileView">';
   if (safeQrImgUrl) {
     html += '<div class="qr-box">';
-    html += '<img src="' + safeQrImgUrl + '" alt="微信支付二维码" id="qrImg" style="-webkit-user-drag:none;user-select:none;-webkit-touch-callout:default;">';
+    html += '<img src="' + safeQrImgUrl + '" alt="微信支付二维码" id="qrImg">';
     html += '</div>';
-    html += '<div id="weixinTip" style="display:none;">';
-    html += '<div class="tip tip-green">💡 请长按上方二维码<br>选择"识别图中二维码"完成支付</div>';
+    
+    // --- 微信浏览器内：长按二维码识别支付 ---
+    html += '<div id="weixinView" style="display:none;">';
+    html += '<div style="background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.4);border-radius:12px;padding:14px;margin:12px 0;">';
+    html += '<div class="tip tip-green" style="font-size:16px;font-weight:bold;margin-bottom:8px;">💡 长按上方二维码</div>';
+    html += '<div class="tip tip-green" style="opacity:0.9;">选择"识别图中二维码"<br>即可直接弹出微信支付</div>';
     html += '</div>';
-    html += '<div id="otherBrowserTip" style="display:none;">';
-    html += '<div class="tip tip-blue">📱 请使用微信扫码支付：</div>';
-    // 非微信浏览器：提供保存二维码按钮+跳转微信按钮
-    html += '<div>';
-    html += '<a href="' + payLink + '" class="save-btn" id="jumpWxBtn">🔗 跳转微信</a>';
-    html += '<a href="' + safeQrImgUrl + '" download="wechat-pay.png" class="save-btn">💾 保存二维码</a>';
+    html += '<div style="font-size:12px;color:#888;margin-top:8px;">📱 在微信内打开本页面，长按二维码即可支付，无需另一台手机</div>';
     html += '</div>';
-    html += '<div class="tip tip-blue">保存后打开微信 → 扫一扫 → 右上角··· → 从相册选图 → 付款</div>';
+    
+    // --- 非微信浏览器：复制链接到微信打开 ---
+    html += '<div id="otherView" style="display:none;">';
+    html += '<div style="background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.4);border-radius:12px;padding:14px;margin:12px 0;">';
+    html += '<div class="tip tip-green" style="font-size:15px;font-weight:bold;margin-bottom:10px;">💡 在微信内打开本站即可直接支付</div>';
+    html += '<div class="tip" style="opacity:0.9;margin-bottom:12px;">复制下方链接 → 打开微信 → 粘贴到对话框 → 点击打开 → 长按二维码支付</div>';
+    html += '<div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:10px;margin:8px 0;font-size:13px;color:#FFD700;word-break:break-all;">';
+    html += '<input id="copyLink" value="' + req.protocol + '://' + req.get('host') + '/pay-jump?orderNo=' + encodeURIComponent(orderNo) + '&payLink=' + encodeURIComponent(payLink) + '&qrImgUrl=' + encodeURIComponent(safeQrImgUrl) + '&amount=' + encodeURIComponent(amount) + '" style="width:100%;background:transparent;border:none;color:#FFD700;font-size:12px;outline:none;" readonly>';
+    html += '</div>';
+    html += '<button onclick="var i=document.getElementById(\'copyLink\');i.select();document.execCommand(\'copy\');this.innerHTML=\'✅ 已复制\';" style="margin-top:8px;padding:10px 24px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border:none;border-radius:20px;font-weight:bold;font-size:14px;cursor:pointer;">📋 复制链接到微信打开</button>';
+    html += '</div>';
+    html += '<div style="background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:8px;padding:10px;margin:8px 0;font-size:12px;color:#ff6b6b;line-height:1.5;">';
+    html += '⚠ 本二维码不支持截图/相册识别<br>请复制链接到微信内打开，长按二维码即可直接支付';
+    html += '</div>';
+    html += '</div>';
+    
+    // 支付完成后自动刷新（通用）
+    html += '<div id="pollingTip" style="margin-top:15px;padding:10px;background:rgba(74,222,128,0.1);border-radius:8px;font-size:12px;color:#4ADE80;">';
+    html += '<span class="loading"></span>支付完成后系统将自动检测并增加金币...';
     html += '</div>';
   } else {
     html += '<a href="' + payLink + '" class="pay-btn">📱 点击前往微信支付</a>';
@@ -153,27 +172,42 @@ app.get('/pay-jump', function(req, res) {
   html += 'var isMobile=/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);';
   html += 'var isWeixin=/MicroMessenger/i.test(ua);';
   html += 'var payLink="' + payLink + '";';
+  html += 'var orderNo="' + orderNo + '";';
   html += 'var mobileView=document.getElementById("mobileView");';
   html += 'var pcView=document.getElementById("pcView");';
-  html += 'var weixinTip=document.getElementById("weixinTip");';
-  html += 'var otherBrowserTip=document.getElementById("otherBrowserTip");';
+  html += 'var weixinView=document.getElementById("weixinView");';
+  html += 'var otherView=document.getElementById("otherView");';
   html += 'var autoJump=document.getElementById("autoJump");';
+  html += 'var pollingTip=document.getElementById("pollingTip");';
   html += 'if(isMobile){';
-  // ------- 手机端：显示二维码视图 -------
+  // ------- 手机端 -------
   html += 'mobileView.style.display="block";pcView.style.display="none";';
   html += 'if(isWeixin){';
-  // 微信浏览器：显示长按识别提示
-  html += 'if(weixinTip)weixinTip.style.display="block";';
-  html += 'if(otherBrowserTip)otherBrowserTip.style.display="none";';
-  // 二维码轻微浮动动画提示长按
-  html += 'setTimeout(function(){var img=document.getElementById("qrImg");if(img){img.style.transition="transform 0.3s";var n=0;setInterval(function(){n++;img.style.transform="scale("+(n%2===0?1:1.03)+")";},1500);}},2000);';
+  // 微信浏览器内：显示长按识别提示
+  html += 'if(weixinView)weixinView.style.display="block";';
+  html += 'if(otherView)otherView.style.display="none";';
   html += '}else{';
-  // 非微信手机浏览器：显示保存二维码+跳转微信按钮
-  html += 'if(weixinTip)weixinTip.style.display="none";';
-  html += 'if(otherBrowserTip)otherBrowserTip.style.display="block";';
+  // 非微信浏览器：显示复制链接到微信打开
+  html += 'if(weixinView)weixinView.style.display="none";';
+  html += 'if(otherView)otherView.style.display="block";';
   html += '}';
+  // 启动轮询：每5秒查询一次订单状态
+  html += 'var pollCount=0;';
+  html += 'var pollTimer=setInterval(function(){';
+  html += 'pollCount++;';
+  html += 'fetch("/api/order/"+orderNo+"/status",{method:"GET"})';
+  html += '.then(function(r){return r.json();})';
+  html += '.then(function(d){';
+  html += 'if(d&&d.paid){';
+  html += 'clearInterval(pollTimer);';
+  html += 'if(pollingTip){pollingTip.innerHTML="✅ 支付成功！金币已自动到账，3秒后自动返回...";pollingTip.style.background="rgba(74,222,128,0.3)";pollingTip.style.fontSize="16px";pollingTip.style.fontWeight="bold";}';
+  html += 'setTimeout(function(){try{window.opener&&window.opener.location.reload();window.close();}catch(e){}try{window.location.href="/forever";}catch(e){}},3000);';
+  html += '}';
+  html += '}).catch(function(e){});';
+  html += 'if(pollCount>=60){clearInterval(pollTimer);if(pollingTip){pollingTip.innerHTML="查询超时，请刷新页面或返回查看金币";pollingTip.style.color="#ff6b6b";}}';
+  html += '},5000);';
   html += '}else{';
-  // ------- PC端：跳转虎皮椒H5页面（或二维码） -------
+  // ------- PC端：跳转虎皮椒H5页面 -------
   html += 'mobileView.style.display="none";pcView.style.display="block";';
   html += 'setTimeout(function(){';
   html += 'try{window.location.href=payLink;}catch(e){';
@@ -854,8 +888,8 @@ async function queryMPayOrder(orderNo) {
 
     const params = {
       version: '1.1',
-      app_id: appId,
-      out_trade_no: outTradeNo,
+      appid: appId,            // 虎皮椒查询接口参数名是appid（与创建订单一致）
+      out_trade_no: outTradeNo, // 商户订单号（创建订单时传的trade_order_id）
       time: timeStr,
       nonce_str: crypto.randomBytes(8).toString('hex')
     };
@@ -1404,9 +1438,11 @@ app.post('/api/payment/notify', async (req, res) => {
     const provider = config.payProvider || 'xunhupay';
 
     // 支持多种订单号字段
-    const actualOrderNo = body.out_trade_no || body.outTradeNo || body.order_no || body.orderNo ||
-                          body.mch_order_no || body.mchOrderNo || body.merchant_order_no ||
-                          body.trade_no;
+    // 虎皮椒回调字段：trade_order_id（我们传入的）, openid（虎皮椒返回的）
+    // 码支付回调字段：out_trade_no, trade_no
+    const actualOrderNo = body.trade_order_id || body.out_trade_no || body.outTradeNo || 
+                          body.order_no || body.orderNo || body.mch_order_no || body.mchOrderNo || 
+                          body.merchant_order_no || body.trade_no || body.openid;
     if (!actualOrderNo) {
       console.error('回调缺少订单号，所有字段:', Object.keys(body));
       return res.send('fail');
@@ -1533,7 +1569,8 @@ app.get('/api/payment/notify', async (req, res) => {
   try {
     const body = req.query || {};
     const provider = config.payProvider || 'xunhupay';
-    const actualOrderNo = body.out_trade_no || body.outTradeNo || body.order_no || body.orderNo || body.trade_no;
+    const actualOrderNo = body.trade_order_id || body.out_trade_no || body.outTradeNo || 
+                          body.order_no || body.orderNo || body.trade_no || body.openid;
     if (!actualOrderNo) return res.send('fail');
 
     let order = orders.get(actualOrderNo);

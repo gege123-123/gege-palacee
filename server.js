@@ -1342,12 +1342,39 @@ function addUserGold(username, amount, reason) {
   return true;
 }
 
-// 确认订单已支付（已禁用 - 需格格手动赏赐金币）
+// 确认订单已支付（用户手动点击"充值完成"按钮）
 app.post('/api/order/:orderNo/confirm', (req, res) => {
-  return res.status(403).json({ 
-    success: false, 
-    message: '手动确认已禁用，请联系格格在控制殿手动赏赐金币' 
-  });
+  const orderNo = req.params.orderNo;
+  const order = orders.get(orderNo);
+
+  if (!order) {
+    return res.status(404).json({ success: false, message: '订单不存在' });
+  }
+
+  // 已支付过，不重复加金币
+  if (order.paid) {
+    return res.json({ success: true, message: '订单已支付，金币已到账', alreadyPaid: true });
+  }
+
+  // 标记订单为已支付
+  order.status = 'paid';
+  order.paidAt = new Date().toISOString();
+  order.paid = false;
+
+  // 给用户加金币
+  if (order.username && order.goldAmount > 0) {
+    const success = addUserGold(order.username, order.goldAmount, '手动确认充值');
+    order.paid = success;
+    console.log(`✅ 手动确认充值成功: 用户=${order.username}, 金币=+${order.goldAmount}, 订单=${orderNo}`);
+  } else if (!order.username) {
+    order.paid = true;
+    console.log(`⚠️ 手动确认订单无关联用户: ${orderNo}`);
+  }
+
+  orders.set(orderNo, order);
+  saveOrders();
+
+  res.json({ success: true, message: '充值成功，金币已到账', goldAdded: order.goldAmount });
 });
 
 // 取消订单

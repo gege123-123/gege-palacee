@@ -1147,7 +1147,7 @@ async function generateRechargeQR() {
           if (rechargePayQr) {
             var html = '';
             
-            // 移动端和PC端统一：显示二维码，提示另一台手机扫码
+            // 移动端和PC端统一：显示二维码
             if (result.qrCode) {
               if (isMobile) {
                 html += '<a href="' + jumpUrl + '" style="display:block;text-align:center;text-decoration:none;">';
@@ -1160,13 +1160,12 @@ async function generateRechargeQR() {
                 // PC端：显示二维码
                 html += '<img src="' + result.qrCode + '" alt="付款二维码" style="max-width:220px;max-height:220px;border-radius:12px;border:3px solid #FFD700;display:block;margin:0 auto;">';
                 html += '<div style="text-align:center;margin-top:10px;font-size:14px;font-weight:bold;color:#FFD700;">💰 支付 ¥' + price + ' 获得 ' + gold + ' 金币</div>';
+                // PC端保留警示框
+                html += '<div style="margin-top:12px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.35);border-radius:10px;padding:12px;margin:12px 8px 0 8px;">';
+                html += '<div style="font-size:14px;font-weight:bold;color:#ff6b6b;text-align:center;line-height:1.6;">⚠️ 请使用另一台手机的微信<br>扫描上方二维码支付</div>';
+                html += '<div style="font-size:12px;color:#FFD700;opacity:0.8;text-align:center;margin-top:6px;line-height:1.5;">本渠道不支持微信内长按识别支付<br>不支持截图/相册识别<br>必须使用另外一台手机扫码</div>';
+                html += '</div>';
               }
-              
-              // 统一提示：必须使用另一台手机扫码
-              html += '<div style="margin-top:12px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.35);border-radius:10px;padding:12px;margin:12px 8px 0 8px;">';
-              html += '<div style="font-size:14px;font-weight:bold;color:#ff6b6b;text-align:center;line-height:1.6;">⚠️ 请使用另一台手机的微信<br>扫描上方二维码支付</div>';
-              html += '<div style="font-size:12px;color:#FFD700;opacity:0.8;text-align:center;margin-top:6px;line-height:1.5;">本渠道不支持微信内长按识别支付<br>不支持截图/相册识别<br>必须使用另外一台手机扫码</div>';
-              html += '</div>';
             }
             
             rechargePayQr.innerHTML = html;
@@ -1177,11 +1176,16 @@ async function generateRechargeQR() {
               ? '<p class="pay-info-tip">✅ 已关联奴才账户，支付成功金币自动到账</p>' 
               : '<p class="pay-info-tip">💡 请先登录以启用自动到账功能</p>';
             
+            var confirmBtn = result.orderNo 
+              ? '<button onclick="manualConfirmRecharge(\'' + result.orderNo + '\')" style="display:block;width:100%;margin-top:12px;padding:14px;background:linear-gradient(135deg,#4ADE80,#22C55E);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;">✅ 充值完成，点击到账</button>'
+              : '';
+            
             rechargePayInfo.innerHTML = 
               '<p class="pay-info-status">⏳ 请扫码付款 ¥' + price + ' (获得 ' + gold + ' 金币)</p>' +
               userHintRedirect +
               '<p class="pay-info-timer">剩余时间：<span id="rechargePayTimer">30:00</span></p>' +
-              '<p class="pay-info-note">📱 请使用另一台手机扫码，支付成功后金币自动到账</p>';
+              '<p class="pay-info-note">📱 请使用另一台手机扫码支付<br>支付成功后点击下方按钮金币到账</p>' +
+              confirmBtn;
           }
         }
         
@@ -1608,6 +1612,39 @@ function stopPaymentPolling() {
   if (state.paymentPollingTimer) {
     clearInterval(state.paymentPollingTimer);
     state.paymentPollingTimer = null;
+  }
+}
+
+// 手动确认充值到账（用户点击"充值完成"按钮）
+async function manualConfirmRecharge(orderNo) {
+  if (!orderNo) {
+    showToast('订单号缺失，无法确认');
+    return;
+  }
+  
+  try {
+    var result = await apiRequest('/api/order/' + orderNo + '/confirm', {
+      method: 'POST'
+    });
+    
+    if (result && result.success) {
+      showToast('✅ 充值成功！' + (result.goldAdded ? '+' + result.goldAdded + ' 金币已到账' : '金币已到账'));
+      stopRechargePolling();
+      
+      // 刷新用户金币显示
+      if (state.currentUser) {
+        setTimeout(function() {
+          location.reload();
+        }, 1500);
+      }
+    } else if (result && result.alreadyPaid) {
+      showToast('该订单已支付，金币已到账');
+    } else {
+      showToast('❌ 确认失败：' + (result && result.message ? result.message : '未知错误'));
+    }
+  } catch (error) {
+    console.error('手动确认充值失败:', error);
+    showToast('❌ 网络错误，请重试');
   }
 }
 

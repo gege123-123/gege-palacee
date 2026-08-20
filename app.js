@@ -1622,29 +1622,51 @@ async function manualConfirmRecharge(orderNo) {
     return;
   }
   
+  // 显示"查询中"状态
+  var btn = event && event.target ? event.target : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ 正在查询支付状态...';
+  }
+  
   try {
     var result = await apiRequest('/api/order/' + orderNo + '/confirm', {
       method: 'POST'
     });
     
     if (result && result.success) {
-      showToast('✅ 充值成功！' + (result.goldAdded ? '+' + result.goldAdded + ' 金币已到账' : '金币已到账'));
+      if (result.alreadyPaid) {
+        showToast('该订单已支付，金币已到账');
+      } else {
+        showToast('✅ 充值成功！+' + result.goldAdded + ' 金币已到账');
+      }
       stopRechargePolling();
       
-      // 刷新用户金币显示
-      if (state.currentUser) {
-        setTimeout(function() {
-          location.reload();
-        }, 1500);
+      // 刷新页面显示新金币
+      setTimeout(function() {
+        location.reload();
+      }, 1500);
+    } else if (result && result.notPaid) {
+      // 未检测到支付
+      showToast('❌ ' + result.message);
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '✅ 充值完成，点击到账';
       }
-    } else if (result && result.alreadyPaid) {
-      showToast('该订单已支付，金币已到账');
     } else {
-      showToast('❌ 确认失败：' + (result && result.message ? result.message : '未知错误'));
+      showToast('❌ ' + (result && result.message ? result.message : '确认失败，请重试'));
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '✅ 充值完成，点击到账';
+      }
     }
   } catch (error) {
     console.error('手动确认充值失败:', error);
     showToast('❌ 网络错误，请重试');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '✅ 充值完成，点击到账';
+    }
   }
 }
 

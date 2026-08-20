@@ -818,12 +818,21 @@ async function queryMPayOrder(orderNo) {
     const appSecret = config.apiSecret;
     if (!appId || !appSecret) return null;
 
-    // 查询接口地址（将 do.html 替换为 query.html）
-    const queryEndpoint = (config.mpayEndpoint || 'https://api.xunhupay.com/payment/do.html')
-      .replace('/do.html', '/query.html');
+    // 查询接口地址（虎皮椒固定地址）
+    const queryEndpoint = 'https://api.xunhupay.com/payment/query.html';
 
     // 本地订单号优先（虎皮椒查询用商户订单号 out_trade_no）
-    const localOrder = orders.get(orderNo);
+    // 先直接查找，找不到就按 apiOrderNo 字段搜索
+    let localOrder = orders.get(orderNo);
+    if (!localOrder) {
+      // 按apiOrderNo搜索（传入的可能是虎皮椒openid）
+      for (const [key, o] of orders) {
+        if (o.apiOrderNo === orderNo || o.orderNo === orderNo) {
+          localOrder = o;
+          break;
+        }
+      }
+    }
     const outTradeNo = localOrder ? localOrder.orderNo : orderNo;
 
     const now = new Date();
@@ -839,17 +848,16 @@ async function queryMPayOrder(orderNo) {
     };
     params.hash = xunhupaySign(params, appSecret);
 
-    const queryString = Object.keys(params)
-      .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
-      .join('&');
+    // 虎皮椒查询接口用JSON方式传参（与创建订单一致）
+    const postBody = JSON.stringify(params);
 
     const result = await httpRequest(queryEndpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Content-Length': Buffer.byteLength(queryString)
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postBody)
       },
-      body: queryString
+      body: postBody
     });
 
     if (!result) return null;

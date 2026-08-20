@@ -57,10 +57,10 @@ app.get(['/new', '/v2', '/v3', '/latest', '/pay', '/palace', '/gege', '/forever'
 });
 
 // ============ 支付中转页面 ============
-// 所有移动端（微信/非微信）：直接显示虎皮椒微信支付二维码
-//   - 微信内：长按二维码 → 识别图中二维码 → 直接支付
-//   - 非微信手机浏览器：显示二维码 → 截图保存或用微信扫一扫相册 → 支付
-// PC端：跳转到虎皮椒H5支付页（可扫码或跳转）
+// 统一显示虎皮椒微信支付二维码，明确提示使用另一台手机扫码
+// - 不支持微信内长按识别支付
+// - 不支持截图/相册识别
+// - 必须使用另外一台手机的微信扫码
 app.get('/pay-jump', function(req, res) {
   var orderNo = req.query.orderNo || '';
   var payLink = req.query.payLink || '';      // 虎皮椒H5跳转链接
@@ -94,17 +94,15 @@ app.get('/pay-jump', function(req, res) {
   html += '.order-info{background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.3);border-radius:12px;padding:12px;margin:12px 0;}';
   html += '.order-info p{margin:4px 0;font-size:13px;color:#FFF;}';
   html += '.qr-box{background:#fff;padding:15px;border-radius:16px;margin:15px auto;display:inline-block;box-shadow:0 6px 20px rgba(0,0,0,0.4);}';
-  html += '.qr-box img{width:200px;height:200px;display:block;}';
+  html += '.qr-box img{width:220px;height:220px;display:block;}';
   html += '.pay-btn{display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:30px;text-decoration:none;font-weight:bold;font-size:16px;margin:15px 0;box-shadow:0 4px 15px rgba(255,215,0,0.4);transition:transform 0.2s;}';
   html += '.pay-btn:active{transform:scale(0.95);}';
-  html += '.save-btn{display:inline-block;padding:10px 24px;background:rgba(255,215,0,0.15);border:1px solid rgba(255,215,0,0.4);color:#FFD700;border-radius:20px;text-decoration:none;font-size:14px;margin:8px 5px;}';
   html += '.loading{display:inline-block;width:20px;height:20px;border:2px solid rgba(255,215,0,0.3);border-top-color:#FFD700;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:8px;vertical-align:middle;}';
   html += '@keyframes spin{to{transform:rotate(360deg);}}';
   html += '.tip{font-size:13px;color:#FFD700;opacity:0.9;margin-top:12px;line-height:1.6;padding:0 10px;}';
-  html += '.tip-green{color:#4ADE80;}';
-  html += '.tip-blue{color:#60A5FA;}';
-  html += '.divider{width:80%;height:1px;background:rgba(255,215,0,0.2);margin:15px auto;}';
-  html += '.auto-jump{font-size:12px;color:#888;margin-top:15px;}';
+  html += '.warn-box{background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.4);border-radius:12px;padding:16px;margin:16px 0;}';
+  html += '.warn-title{font-size:16px;font-weight:bold;color:#ff6b6b;margin-bottom:8px;line-height:1.5;}';
+  html += '.warn-detail{font-size:12px;color:#FFD700;opacity:0.85;line-height:1.7;text-align:left;padding-left:4px;}';
   html += '</style></head><body>';
   html += '<div class="container">';
   html += '<div class="palace-icon">🐉</div>';
@@ -116,82 +114,36 @@ app.get('/pay-jump', function(req, res) {
   html += '<p>订单号：' + orderNo + '</p>';
   html += '</div>';
 
-  // ====== 移动端视图 ======
-  // 微信浏览器内：显示二维码，长按识别直接拉起微信支付（同一台手机即可完成）
-  // 非微信浏览器：提供"复制链接到微信打开"按钮（在同一台手机上完成支付）
-  html += '<div id="mobileView">';
   if (safeQrImgUrl) {
     html += '<div class="qr-box">';
     html += '<img src="' + safeQrImgUrl + '" alt="微信支付二维码" id="qrImg">';
     html += '</div>';
-    
-    // --- 微信浏览器内：长按二维码识别支付 ---
-    html += '<div id="weixinView" style="display:none;">';
-    html += '<div style="background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.4);border-radius:12px;padding:14px;margin:12px 0;">';
-    html += '<div class="tip tip-green" style="font-size:16px;font-weight:bold;margin-bottom:8px;">💡 长按上方二维码</div>';
-    html += '<div class="tip tip-green" style="opacity:0.9;">选择"识别图中二维码"<br>即可直接弹出微信支付</div>';
-    html += '</div>';
-    html += '<div style="font-size:12px;color:#888;margin-top:8px;">📱 在微信内打开本页面，长按二维码即可支付，无需另一台手机</div>';
-    html += '</div>';
-    
-    // --- 非微信浏览器：复制链接到微信打开 ---
-    html += '<div id="otherView" style="display:none;">';
-    html += '<div style="background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.4);border-radius:12px;padding:14px;margin:12px 0;">';
-    html += '<div class="tip tip-green" style="font-size:15px;font-weight:bold;margin-bottom:10px;">💡 在微信内打开本站即可直接支付</div>';
-    html += '<div class="tip" style="opacity:0.9;margin-bottom:12px;">复制下方链接 → 打开微信 → 粘贴到对话框 → 点击打开 → 长按二维码支付</div>';
-    html += '<div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:10px;margin:8px 0;font-size:13px;color:#FFD700;word-break:break-all;">';
-    html += '<input id="copyLink" value="' + req.protocol + '://' + req.get('host') + '/pay-jump?orderNo=' + encodeURIComponent(orderNo) + '&payLink=' + encodeURIComponent(payLink) + '&qrImgUrl=' + encodeURIComponent(safeQrImgUrl) + '&amount=' + encodeURIComponent(amount) + '" style="width:100%;background:transparent;border:none;color:#FFD700;font-size:12px;outline:none;" readonly>';
-    html += '</div>';
-    html += '<button onclick="var i=document.getElementById(\'copyLink\');i.select();document.execCommand(\'copy\');this.innerHTML=\'✅ 已复制\';" style="margin-top:8px;padding:10px 24px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border:none;border-radius:20px;font-weight:bold;font-size:14px;cursor:pointer;">📋 复制链接到微信打开</button>';
-    html += '</div>';
-    html += '<div style="background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:8px;padding:10px;margin:8px 0;font-size:12px;color:#ff6b6b;line-height:1.5;">';
-    html += '⚠ 本二维码不支持截图/相册识别<br>请复制链接到微信内打开，长按二维码即可直接支付';
+
+    // 统一警示：必须使用另一台手机扫码
+    html += '<div class="warn-box">';
+    html += '<div class="warn-title">⚠️ 请使用另一台手机的微信<br>扫描上方二维码支付</div>';
+    html += '<div class="warn-detail">';
+    html += '❌ 不支持微信内长按识别支付<br>';
+    html += '❌ 不支持截图保存 / 相册识别<br>';
+    html += '❌ 不支持同一台手机跳转支付<br>';
+    html += '✅ 必须使用另外一台手机扫码';
     html += '</div>';
     html += '</div>';
     
-    // 支付完成后自动刷新（通用）
+    // 支付完成后自动检测
     html += '<div id="pollingTip" style="margin-top:15px;padding:10px;background:rgba(74,222,128,0.1);border-radius:8px;font-size:12px;color:#4ADE80;">';
     html += '<span class="loading"></span>支付完成后系统将自动检测并增加金币...';
     html += '</div>';
   } else {
-    html += '<a href="' + payLink + '" class="pay-btn">📱 点击前往微信支付</a>';
+    html += '<a href="' + payLink + '" class="pay-btn">📱 打开微信扫码支付</a>';
   }
-  html += '</div>';
-
-  // ====== PC端视图：跳转按钮 + 自动跳转 ======
-  html += '<div id="pcView" style="display:none;">';
-  html += '<a href="' + payLink + '" id="payBtn" class="pay-btn">🔗 前往微信支付页面</a>';
-  html += '<div class="auto-jump" id="autoJump"><span class="loading"></span>正在自动跳转...</div>';
-  html += '<div class="tip">或用手机微信扫描上方二维码直接支付</div>';
-  html += '</div>';
 
   html += '</div>';
   html += '<script>';
   html += '(function(){';
-  html += 'var ua=navigator.userAgent;';
-  html += 'var isMobile=/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);';
-  html += 'var isWeixin=/MicroMessenger/i.test(ua);';
-  html += 'var payLink="' + payLink + '";';
   html += 'var orderNo="' + orderNo + '";';
-  html += 'var mobileView=document.getElementById("mobileView");';
-  html += 'var pcView=document.getElementById("pcView");';
-  html += 'var weixinView=document.getElementById("weixinView");';
-  html += 'var otherView=document.getElementById("otherView");';
-  html += 'var autoJump=document.getElementById("autoJump");';
   html += 'var pollingTip=document.getElementById("pollingTip");';
-  html += 'if(isMobile){';
-  // ------- 手机端 -------
-  html += 'mobileView.style.display="block";pcView.style.display="none";';
-  html += 'if(isWeixin){';
-  // 微信浏览器内：显示长按识别提示
-  html += 'if(weixinView)weixinView.style.display="block";';
-  html += 'if(otherView)otherView.style.display="none";';
-  html += '}else{';
-  // 非微信浏览器：显示复制链接到微信打开
-  html += 'if(weixinView)weixinView.style.display="none";';
-  html += 'if(otherView)otherView.style.display="block";';
-  html += '}';
-  // 启动轮询：每5秒查询一次订单状态
+  // 启动轮询：每5秒查询一次订单状态（手机和PC都启用）
   html += 'var pollCount=0;';
   html += 'var pollTimer=setInterval(function(){';
   html += 'pollCount++;';
@@ -204,16 +156,8 @@ app.get('/pay-jump', function(req, res) {
   html += 'setTimeout(function(){try{window.opener&&window.opener.location.reload();window.close();}catch(e){}try{window.location.href="/forever";}catch(e){}},3000);';
   html += '}';
   html += '}).catch(function(e){});';
-  html += 'if(pollCount>=60){clearInterval(pollTimer);if(pollingTip){pollingTip.innerHTML="查询超时，请刷新页面或返回查看金币";pollingTip.style.color="#ff6b6b";}}';
+  html += 'if(pollCount>=120){clearInterval(pollTimer);if(pollingTip){pollingTip.innerHTML="查询超时，请刷新页面或返回查看金币";pollingTip.style.color="#ff6b6b";}}';
   html += '},5000);';
-  html += '}else{';
-  // ------- PC端：跳转虎皮椒H5页面 -------
-  html += 'mobileView.style.display="none";pcView.style.display="block";';
-  html += 'setTimeout(function(){';
-  html += 'try{window.location.href=payLink;}catch(e){';
-  html += 'autoJump.innerHTML="自动跳转失败，请点击上方按钮";';
-  html += '}},500);';
-  html += '}';
   html += '})();';
   html += '</script></body></html>';
 

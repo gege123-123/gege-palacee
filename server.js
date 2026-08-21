@@ -1085,31 +1085,35 @@ function isPaySuccess(result) {
 
 /**
  * 通用订单支付成功处理 - 统一入口
+ * 关键：order.paid 只在金币已成功加给用户时才为true
+ * 没有username时保持 order.paid=false，等用户绑定后再加金币
  */
 function markOrderAsPaid(orderNo, payData, source) {
   const order = orders.get(orderNo);
   if (!order) return false;
-  
-  // 防止重复处理
-  if (order.status === 'paid' && order.paid) {
-    console.log(`订单已处理，跳过: ${orderNo}`);
+
+  // 已成功加过金币，跳过（防止重复加金币）
+  if (order.paid) {
+    console.log(`订单已加过金币，跳过: ${orderNo}`);
     return true;
   }
-  
+
   order.status = 'paid';
-  order.paidAt = new Date().toISOString();
+  order.paidAt = order.paidAt || new Date().toISOString();
   order.notifyData = payData;
-  
-  // 自动给用户加金币
-  if (order.username && order.goldAmount > 0 && !order.paid) {
+
+  // 必须有username才能加金币
+  if (order.username && order.goldAmount > 0) {
     const success = addUserGold(order.username, order.goldAmount, `${source}充值`);
     order.paid = success;
-    console.log(`✅ ${source}充值成功: 用户=${order.username}, 金币=+${order.goldAmount}, 订单=${orderNo}`);
+    console.log(`✅ ${source}充值成功: 用户=${order.username}, 金币=+${order.goldAmount}, 订单=${orderNo}, 结果=${success}`);
   } else if (!order.username) {
-    console.log(`⚠️ ${source}订单无关联用户: ${orderNo}`);
-    order.paid = true;
+    // 没有关联用户，保持 order.paid=false，等用户绑定后再加金币
+    console.log(`⚠️ ${source}订单暂无关联用户: ${orderNo}, 等待用户绑定后加金币`);
+  } else if (!order.goldAmount || order.goldAmount <= 0) {
+    console.log(`⚠️ ${source}订单金币数无效: ${orderNo}, goldAmount=${order.goldAmount}`);
   }
-  
+
   orders.set(orderNo, order);
   saveOrders();
   return true;

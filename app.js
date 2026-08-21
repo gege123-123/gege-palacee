@@ -1073,7 +1073,15 @@ async function generateRechargeQR() {
   var amount = state.selectedRecharge;
   var price = getRechargePrice(amount);
   var gold = getRechargeGold(amount);
-  
+
+  // 关键：必须登录后才能充值，否则订单无法绑定用户，支付后金币无法到账
+  var loginToken = state.userToken || localStorage.getItem('gege_user_token');
+  if (!loginToken) {
+    showToast('请先登录奴才账户后再充值，否则金币无法到账');
+    showUserLoginModal();
+    return;
+  }
+
   // 确保支付弹窗内部关键元素存在（防止成功页面破坏结构后无法恢复）
   ensureRechargePayModalStructure();
   
@@ -1314,14 +1322,31 @@ function startRechargePolling() {
     if (state.currentRechargeOrder && state.currentRechargeOrder.orderNo) {
       // 使用优化的状态查询接口（服务器端会主动查询第三方）
       var result = await apiRequest('/api/order/' + state.currentRechargeOrder.orderNo + '/status');
-      
-      if (result && result.success && result.status === 'paid') {
+
+      if (result && result.success && result.status === 'paid' && result.goldReceived) {
+        // 金币真正到账了
         console.log('检测到支付成功，金币已到账');
         stopRechargePolling();
         confirmRechargeSuccess();
         return;
       }
-      
+
+      if (result && result.success && result.status === 'paid' && !result.goldReceived) {
+        // 支付成功但金币未到账（通常是因为未登录）
+        console.log('支付成功但金币未到账，username:', result.username);
+        stopRechargePolling();
+        var loginToken = state.userToken || localStorage.getItem('gege_user_token');
+        if (!loginToken) {
+          showToast('⚠️ 支付已成功，但未登录账户。请登录后点击"充值完成"按钮领取金币');
+          showUserLoginModal();
+        } else {
+          // 已登录但金币没到账，尝试手动确认
+          showToast('支付已成功，正在领取金币...');
+          manualConfirmRecharge(state.currentRechargeOrder.orderNo);
+        }
+        return;
+      }
+
       // 每20次轮询（约60秒），显示查询提示
       if (pollCount % 20 === 0) {
         if (rechargePayHint) {
@@ -1654,19 +1679,28 @@ async function manualConfirmRecharge(orderNo) {
     showToast('订单号缺失，无法确认');
     return;
   }
-  
+
+  // 关键：确认前必须登录，否则金币无法绑定到账户
+  var loginToken = state.userToken || localStorage.getItem('gege_user_token');
+  if (!loginToken) {
+    showToast('请先登录奴才账户，否则金币无法到账');
+    showUserLoginModal();
+    return;
+  }
+
   // 显示"查询中"状态
   var btn = event && event.target ? event.target : null;
   if (btn) {
     btn.disabled = true;
     btn.textContent = '⏳ 正在查询支付状态...';
   }
-  
+
   try {
     var result = await apiRequest('/api/order/' + orderNo + '/confirm', {
-      method: 'POST'
+      method: 'POST',
+      body: { token: loginToken }
     });
-    
+
     if (result && result.success) {
       if (result.alreadyPaid) {
         showToast('该订单已支付，金币已到账');
@@ -1674,11 +1708,19 @@ async function manualConfirmRecharge(orderNo) {
         showToast('✅ 充值成功！+' + result.goldAdded + ' 金币已到账');
       }
       stopRechargePolling();
-      
+
       // 刷新页面显示新金币
       setTimeout(function() {
         location.reload();
       }, 1500);
+    } else if (result && result.needLogin) {
+      // 支付成功但未登录
+      showToast('⚠️ 支付已成功，请登录后再次点击"充值完成"按钮');
+      showUserLoginModal();
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '✅ 充值完成，点击到账';
+      }
     } else if (result && result.notPaid) {
       // 未检测到支付
       showToast('❌ ' + result.message);

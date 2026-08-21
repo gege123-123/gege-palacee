@@ -223,8 +223,8 @@ async function apiRequest(endpoint, options) {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache'
     };
-    // 如果有token则添加认证头（多源兜底：state.userToken / localStorage.authToken / localStorage.userToken）
-    var token = state.userToken || localStorage.getItem('authToken') || localStorage.getItem('userToken');
+    // 如果有token则添加认证头（多源兜底：state.userToken / localStorage.gege_user_token / authToken / userToken）
+    var token = state.userToken || localStorage.getItem('gege_user_token') || localStorage.getItem('authToken') || localStorage.getItem('userToken');
     if (token) {
       headers['Authorization'] = 'Bearer ' + token;
     }
@@ -1106,8 +1106,8 @@ async function generateRechargeQR() {
       description: '充值' + gold + '金币'
     };
     
-    // 如果有用户token，直接在body中也传递一份（三重保险：state + localStorage + authToken）
-    var userToken = state.userToken || localStorage.getItem('authToken') || localStorage.getItem('userToken');
+    // 如果有用户token，直接在body中也传递一份（四重保险：state + localStorage多key）
+    var userToken = state.userToken || localStorage.getItem('gege_user_token') || localStorage.getItem('authToken') || localStorage.getItem('userToken');
     if (userToken) {
       requestBody.token = userToken;
     }

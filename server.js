@@ -1087,6 +1087,7 @@ function isPaySuccess(result) {
  * 通用订单支付成功处理 - 统一入口
  * 关键：order.paid 只在金币已成功加给用户时才为true
  * 没有username时保持 order.paid=false，等用户绑定后再加金币
+ * 返回值：true=金币已成功加给用户，false=未加金币（无用户或加金币失败）
  */
 function markOrderAsPaid(orderNo, payData, source) {
   const order = orders.get(orderNo);
@@ -1106,7 +1107,7 @@ function markOrderAsPaid(orderNo, payData, source) {
   if (order.username && order.goldAmount > 0) {
     const success = addUserGold(order.username, order.goldAmount, `${source}充值`);
     order.paid = success;
-    console.log(`✅ ${source}充值成功: 用户=${order.username}, 金币=+${order.goldAmount}, 订单=${orderNo}, 结果=${success}`);
+    console.log(`✅ ${source}充值: 用户=${order.username}, 金币=+${order.goldAmount}, 订单=${orderNo}, 结果=${success}`);
   } else if (!order.username) {
     // 没有关联用户，保持 order.paid=false，等用户绑定后再加金币
     console.log(`⚠️ ${source}订单暂无关联用户: ${orderNo}, 等待用户绑定后加金币`);
@@ -1116,7 +1117,8 @@ function markOrderAsPaid(orderNo, payData, source) {
 
   orders.set(orderNo, order);
   saveOrders();
-  return true;
+  // 只有金币真正加给用户才返回true
+  return !!order.paid;
 }
 
 // ============ API 路由 ============
@@ -1413,18 +1415,26 @@ app.post('/api/order/:orderNo/confirm', async (req, res) => {
   }
 
   const success = markOrderAsPaid(orderNo, payResult, '手动确认');
-  
+
   if (success) {
-    res.json({ 
-      success: true, 
-      message: '充值成功，金币已到账', 
+    res.json({
+      success: true,
+      message: '充值成功，金币已到账',
       goldAdded: order.goldAmount,
       username: order.username
     });
+  } else if (!order.username) {
+    // 支付成功但订单没绑定用户（用户未登录就充值了）
+    res.json({
+      success: false,
+      message: '支付已成功，但未检测到登录账户。请先登录后再点击充值完成，金币才能到账',
+      needLogin: true,
+      paid: true
+    });
   } else {
-    res.json({ 
-      success: false, 
-      message: '充值确认失败，请稍后重试或联系格格' 
+    res.json({
+      success: false,
+      message: '充值确认失败，请稍后重试或联系格格'
     });
   }
 });
@@ -2216,7 +2226,8 @@ app.get('/api/order/:orderNo/status', (req, res) => {
           success: true,
           orderNo: orderNo,
           status: 'paid',
-          paid: true,
+          paid: updatedOrder ? updatedOrder.paid : false,  // 真实金币到账状态
+          goldReceived: updatedOrder ? updatedOrder.paid : false,
           goldAmount: updatedOrder ? updatedOrder.goldAmount : 0,
           username: updatedOrder ? updatedOrder.username : null,
           justPaid: true
@@ -2244,7 +2255,8 @@ app.get('/api/order/:orderNo/status', (req, res) => {
       success: true,
       orderNo: orderNo,
       status: order.status,
-      paid: order.status === 'paid',
+      paid: order.paid,  // 真实金币到账状态（order.paid 而非 order.status）
+      goldReceived: order.paid,  // 明确字段：金币是否已到账
       goldAmount: order.goldAmount || 0,
       username: order.username,
       paidAt: order.paidAt

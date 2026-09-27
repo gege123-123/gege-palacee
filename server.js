@@ -56,6 +56,114 @@ app.get(['/new', '/v2', '/v3', '/latest', '/pay', '/palace', '/gege', '/forever'
   res.redirect(302, '/?t=' + stamp);
 });
 
+// ============ 支付中转页面 ============
+// 统一显示虎皮椒微信支付二维码，明确提示使用另一台手机扫码
+// - 不支持微信内长按识别支付
+// - 不支持截图/相册识别
+// - 必须使用另外一台手机的微信扫码
+app.get('/pay-jump', function(req, res) {
+  var orderNo = req.query.orderNo || '';
+  var payLink = req.query.payLink || '';      // 虎皮椒H5跳转链接
+  var qrImgUrl = req.query.qrImgUrl || '';    // 虎皮椒微信支付二维码图片URL
+  var amount = req.query.amount || '';        // 金额
+
+  // 安全检查：只允许虎皮椒支付链接
+  if (!payLink || payLink.indexOf('xunhupay.com') < 0) {
+    return res.status(400).send('支付链接无效');
+  }
+
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+
+  // 二维码安全检查：只允许虎皮椒二维码
+  var safeQrImgUrl = (qrImgUrl && qrImgUrl.indexOf('xunhupay.com') >= 0) ? qrImgUrl : '';
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">';
+  html += '<title>格格的宫殿 · 微信支付</title>';
+  html += '<style>';
+  html += '*{margin:0;padding:0;box-sizing:border-box;}';
+  html += 'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#1a0f0a,#3d2817);min-height:100vh;display:flex;align-items:center;justify-content:center;color:#FFD700;padding:20px;}';
+  html += '.container{text-align:center;max-width:400px;width:100%;}';
+  html += '.palace-icon{font-size:50px;margin-bottom:15px;animation:bounce 1s infinite;}';
+  html += '@keyframes bounce{0%,100%{transform:scale(1);}50%{transform:scale(1.1);}}';
+  html += '.title{font-size:20px;font-weight:bold;margin-bottom:12px;color:#FFD700;text-shadow:0 2px 4px rgba(0,0,0,0.5);}';
+  html += '.amount{font-size:42px;font-weight:bold;color:#FFD700;margin:10px 0;text-shadow:0 2px 8px rgba(255,215,0,0.5);}';
+  html += '.amount span{font-size:20px;opacity:0.7;}';
+  html += '.order-info{background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.3);border-radius:12px;padding:12px;margin:12px 0;}';
+  html += '.order-info p{margin:4px 0;font-size:13px;color:#FFF;}';
+  html += '.qr-box{background:#fff;padding:15px;border-radius:16px;margin:15px auto;display:inline-block;box-shadow:0 6px 20px rgba(0,0,0,0.4);}';
+  html += '.qr-box img{width:220px;height:220px;display:block;}';
+  html += '.pay-btn{display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:30px;text-decoration:none;font-weight:bold;font-size:16px;margin:15px 0;box-shadow:0 4px 15px rgba(255,215,0,0.4);transition:transform 0.2s;}';
+  html += '.pay-btn:active{transform:scale(0.95);}';
+  html += '.loading{display:inline-block;width:20px;height:20px;border:2px solid rgba(255,215,0,0.3);border-top-color:#FFD700;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:8px;vertical-align:middle;}';
+  html += '@keyframes spin{to{transform:rotate(360deg);}}';
+  html += '.tip{font-size:13px;color:#FFD700;opacity:0.9;margin-top:12px;line-height:1.6;padding:0 10px;}';
+  html += '.warn-box{background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.4);border-radius:12px;padding:16px;margin:16px 0;}';
+  html += '.warn-title{font-size:16px;font-weight:bold;color:#ff6b6b;margin-bottom:8px;line-height:1.5;}';
+  html += '.warn-detail{font-size:12px;color:#FFD700;opacity:0.85;line-height:1.7;text-align:left;padding-left:4px;}';
+  html += '</style></head><body>';
+  html += '<div class="container">';
+  html += '<div class="palace-icon">🐉</div>';
+  html += '<div class="title">格格的宫殿 · 微信支付</div>';
+  if (amount) {
+    html += '<div class="amount">¥' + amount + '</div>';
+  }
+  html += '<div class="order-info">';
+  html += '<p>订单号：' + orderNo + '</p>';
+  html += '</div>';
+
+  if (safeQrImgUrl) {
+    html += '<div class="qr-box">';
+    html += '<img src="' + safeQrImgUrl + '" alt="微信支付二维码" id="qrImg">';
+    html += '</div>';
+
+    // 统一警示：必须使用另一台手机扫码
+    html += '<div class="warn-box">';
+    html += '<div class="warn-title">⚠️ 请使用另一台手机的微信<br>扫描上方二维码支付</div>';
+    html += '<div class="warn-detail">';
+    html += '❌ 不支持微信内长按识别支付<br>';
+    html += '❌ 不支持截图保存 / 相册识别<br>';
+    html += '❌ 不支持同一台手机跳转支付<br>';
+    html += '✅ 必须使用另外一台手机扫码';
+    html += '</div>';
+    html += '</div>';
+    
+    // 支付完成后自动检测
+    html += '<div id="pollingTip" style="margin-top:15px;padding:10px;background:rgba(74,222,128,0.1);border-radius:8px;font-size:12px;color:#4ADE80;">';
+    html += '<span class="loading"></span>支付完成后系统将自动检测并增加金币...';
+    html += '</div>';
+  } else {
+    html += '<a href="' + payLink + '" class="pay-btn">📱 打开微信扫码支付</a>';
+  }
+
+  html += '</div>';
+  html += '<script>';
+  html += '(function(){';
+  html += 'var orderNo="' + orderNo + '";';
+  html += 'var pollingTip=document.getElementById("pollingTip");';
+  // 启动轮询：每5秒查询一次订单状态（手机和PC都启用）
+  html += 'var pollCount=0;';
+  html += 'var pollTimer=setInterval(function(){';
+  html += 'pollCount++;';
+  html += 'fetch("/api/order/"+orderNo+"/status",{method:"GET"})';
+  html += '.then(function(r){return r.json();})';
+  html += '.then(function(d){';
+  html += 'if(d&&d.paid){';
+  html += 'clearInterval(pollTimer);';
+  html += 'if(pollingTip){pollingTip.innerHTML="✅ 支付成功！金币已自动到账，3秒后自动返回...";pollingTip.style.background="rgba(74,222,128,0.3)";pollingTip.style.fontSize="16px";pollingTip.style.fontWeight="bold";}';
+  html += 'setTimeout(function(){try{window.opener&&window.opener.location.reload();window.close();}catch(e){}try{window.location.href="/forever";}catch(e){}},3000);';
+  html += '}';
+  html += '}).catch(function(e){});';
+  html += 'if(pollCount>=120){clearInterval(pollTimer);if(pollingTip){pollingTip.innerHTML="查询超时，请刷新页面或返回查看金币";pollingTip.style.color="#ff6b6b";}}';
+  html += '},5000);';
+  html += '})();';
+  html += '</script></body></html>';
+
+  res.send(html);
+});
+
 // 确保正确处理JSON请求
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
@@ -710,38 +818,53 @@ async function queryMPayOrder(orderNo) {
     const appSecret = config.apiSecret;
     if (!appId || !appSecret) return null;
 
-    // 查询接口地址（将 do.html 替换为 query.html）
-    const queryEndpoint = (config.mpayEndpoint || 'https://api.xunhupay.com/payment/do.html')
-      .replace('/do.html', '/query.html');
+    // 查询接口地址（虎皮椒固定地址）
+    const queryEndpoint = 'https://api.xunhupay.com/payment/query.html';
 
-    // 本地订单号优先（虎皮椒查询用商户订单号 out_trade_no）
-    const localOrder = orders.get(orderNo);
-    const outTradeNo = localOrder ? localOrder.orderNo : orderNo;
+    // 本地订单号优先
+    // 先直接查找，找不到就按 apiOrderNo 字段搜索
+    let localOrder = orders.get(orderNo);
+    if (!localOrder) {
+      // 按apiOrderNo搜索（传入的可能是虎皮椒openid）
+      for (const [key, o] of orders) {
+        if (o.apiOrderNo === orderNo || o.orderNo === orderNo) {
+          localOrder = o;
+          break;
+        }
+      }
+    }
 
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-
+    // 虎皮椒查询接口参数（根据官方文档）：
+    // out_trade_order 和 open_order_id 二选一
+    // time 为Unix时间戳（秒）
     const params = {
       version: '1.1',
-      app_id: appId,
-      out_trade_no: outTradeNo,
-      time: timeStr,
+      appid: appId,
+      time: Math.floor(Date.now() / 1000),  // Unix时间戳（秒）
       nonce_str: crypto.randomBytes(8).toString('hex')
     };
+
+    // 优先用 open_order_id（虎皮椒内部订单号），更可靠
+    if (localOrder && localOrder.apiOrderNo) {
+      params.open_order_id = String(localOrder.apiOrderNo);
+    } else if (localOrder && localOrder.orderNo) {
+      params.out_trade_order = localOrder.orderNo;
+    } else {
+      params.out_trade_order = orderNo;
+    }
+
     params.hash = xunhupaySign(params, appSecret);
 
-    const queryString = Object.keys(params)
-      .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
-      .join('&');
+    // 虎皮椒查询接口用JSON方式传参
+    const postBody = JSON.stringify(params);
 
     const result = await httpRequest(queryEndpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Content-Length': Buffer.byteLength(queryString)
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postBody)
       },
-      body: queryString
+      body: postBody
     });
 
     if (!result) return null;
@@ -759,15 +882,16 @@ async function queryMPayOrder(orderNo) {
 
     console.log('虎皮椒查询响应:', JSON.stringify(jsonResp).substring(0, 300));
 
-    // 转换为统一格式，方便上层判断
-    // 上层代码统一看 status 字段：1=已支付
-    if (jsonResp.code === 0 || jsonResp.code === '0') {
+    // 虎皮椒查询返回 errcode=0 表示请求成功
+    // data.status: OD=支付成功, WP=待支付, CD=已取消
+    if (jsonResp.errcode === 0 || jsonResp.errcode === '0') {
       const data = jsonResp.data || {};
+      const isPaid = data.status === 'OD' || data.status === 'od';
       return {
         code: 1,
-        status: data.status === true || data.status === 'true' || data.status === 1 || data.status === 'OK' ? 1 : 0,
-        pay_status: data.status === true || data.status === 'true' || data.status === 1 || data.status === 'OK' ? 1 : 0,
-        msg: '查询成功',
+        status: isPaid ? 1 : 0,
+        pay_status: isPaid ? 1 : 0,
+        msg: '查询成功: ' + (data.status || 'unknown'),
         rawData: jsonResp
       };
     } else {
@@ -775,7 +899,7 @@ async function queryMPayOrder(orderNo) {
         code: 0,
         status: 0,
         pay_status: 0,
-        msg: jsonResp.msg || jsonResp.errmsg || '查询失败',
+        msg: jsonResp.errmsg || '查询失败',
         rawData: jsonResp
       };
     }
@@ -961,34 +1085,40 @@ function isPaySuccess(result) {
 
 /**
  * 通用订单支付成功处理 - 统一入口
+ * 关键：order.paid 只在金币已成功加给用户时才为true
+ * 没有username时保持 order.paid=false，等用户绑定后再加金币
+ * 返回值：true=金币已成功加给用户，false=未加金币（无用户或加金币失败）
  */
 function markOrderAsPaid(orderNo, payData, source) {
   const order = orders.get(orderNo);
   if (!order) return false;
-  
-  // 防止重复处理
-  if (order.status === 'paid' && order.paid) {
-    console.log(`订单已处理，跳过: ${orderNo}`);
+
+  // 已成功加过金币，跳过（防止重复加金币）
+  if (order.paid) {
+    console.log(`订单已加过金币，跳过: ${orderNo}`);
     return true;
   }
-  
+
   order.status = 'paid';
-  order.paidAt = new Date().toISOString();
+  order.paidAt = order.paidAt || new Date().toISOString();
   order.notifyData = payData;
-  
-  // 自动给用户加金币
-  if (order.username && order.goldAmount > 0 && !order.paid) {
+
+  // 必须有username才能加金币
+  if (order.username && order.goldAmount > 0) {
     const success = addUserGold(order.username, order.goldAmount, `${source}充值`);
     order.paid = success;
-    console.log(`✅ ${source}充值成功: 用户=${order.username}, 金币=+${order.goldAmount}, 订单=${orderNo}`);
+    console.log(`✅ ${source}充值: 用户=${order.username}, 金币=+${order.goldAmount}, 订单=${orderNo}, 结果=${success}`);
   } else if (!order.username) {
-    console.log(`⚠️ ${source}订单无关联用户: ${orderNo}`);
-    order.paid = true;
+    // 没有关联用户，保持 order.paid=false，等用户绑定后再加金币
+    console.log(`⚠️ ${source}订单暂无关联用户: ${orderNo}, 等待用户绑定后加金币`);
+  } else if (!order.goldAmount || order.goldAmount <= 0) {
+    console.log(`⚠️ ${source}订单金币数无效: ${orderNo}, goldAmount=${order.goldAmount}`);
   }
-  
+
   orders.set(orderNo, order);
   saveOrders();
-  return true;
+  // 只有金币真正加给用户才返回true
+  return !!order.paid;
 }
 
 // ============ API 路由 ============
@@ -1234,12 +1364,79 @@ function addUserGold(username, amount, reason) {
   return true;
 }
 
-// 确认订单已支付（已禁用 - 需格格手动赏赐金币）
-app.post('/api/order/:orderNo/confirm', (req, res) => {
-  return res.status(403).json({ 
-    success: false, 
-    message: '手动确认已禁用，请联系格格在控制殿手动赏赐金币' 
-  });
+// 确认订单已支付（用户手动点击"充值完成"按钮）
+// 必须先查询虎皮椒支付状态，只有真支付了才加金币
+app.post('/api/order/:orderNo/confirm', async (req, res) => {
+  const orderNo = req.params.orderNo;
+  const order = orders.get(orderNo);
+
+  if (!order) {
+    return res.status(404).json({ success: false, message: '订单不存在' });
+  }
+
+  // 已支付过，不重复加金币
+  if (order.paid) {
+    return res.json({ success: true, message: '订单已支付，金币已到账', alreadyPaid: true, goldAdded: order.goldAmount });
+  }
+
+  // 先查询虎皮椒，验证是否真的支付了
+  const apiOrderNo = order.apiOrderNo || order.orderNo;
+  let payResult = null;
+  try {
+    payResult = await queryMPayOrder(apiOrderNo);
+    console.log(`[手动确认] 查询订单 ${orderNo} 支付状态:`, payResult ? JSON.stringify(payResult).substring(0, 200) : 'null');
+  } catch (e) {
+    console.error('[手动确认] 查询虎皮椒失败:', e.message);
+  }
+
+  // 检查是否真的支付成功
+  if (!payResult || !isPaySuccess(payResult)) {
+    return res.json({ 
+      success: false, 
+      message: '未检测到支付记录，请确认已用另一台手机扫码完成支付后再点击',
+      notPaid: true
+    });
+  }
+
+  // 虎皮椒确认已支付
+  // 如果订单还没绑定用户，尝试从请求头/body拿token绑定用户
+  if (!order.username) {
+    const headerToken = req.headers.authorization?.replace('Bearer ', '');
+    const bodyToken = req.body && req.body.token;
+    const token = headerToken || bodyToken;
+    if (token) {
+      const user = verifySession(token);
+      if (user) {
+        order.username = user.username;
+        orders.set(orderNo, order);
+        console.log(`[手动确认] 订单${orderNo}绑定用户: ${user.username}`);
+      }
+    }
+  }
+
+  const success = markOrderAsPaid(orderNo, payResult, '手动确认');
+
+  if (success) {
+    res.json({
+      success: true,
+      message: '充值成功，金币已到账',
+      goldAdded: order.goldAmount,
+      username: order.username
+    });
+  } else if (!order.username) {
+    // 支付成功但订单没绑定用户（用户未登录就充值了）
+    res.json({
+      success: false,
+      message: '支付已成功，但未检测到登录账户。请先登录后再点击充值完成，金币才能到账',
+      needLogin: true,
+      paid: true
+    });
+  } else {
+    res.json({
+      success: false,
+      message: '充值确认失败，请稍后重试或联系格格'
+    });
+  }
 });
 
 // 取消订单
@@ -1274,9 +1471,11 @@ app.post('/api/payment/notify', async (req, res) => {
     const provider = config.payProvider || 'xunhupay';
 
     // 支持多种订单号字段
-    const actualOrderNo = body.out_trade_no || body.outTradeNo || body.order_no || body.orderNo ||
-                          body.mch_order_no || body.mchOrderNo || body.merchant_order_no ||
-                          body.trade_no;
+    // 虎皮椒回调字段：trade_order_id（我们传入的）, openid（虎皮椒返回的）
+    // 码支付回调字段：out_trade_no, trade_no
+    const actualOrderNo = body.trade_order_id || body.out_trade_no || body.outTradeNo || 
+                          body.order_no || body.orderNo || body.mch_order_no || body.mchOrderNo || 
+                          body.merchant_order_no || body.trade_no || body.openid;
     if (!actualOrderNo) {
       console.error('回调缺少订单号，所有字段:', Object.keys(body));
       return res.send('fail');
@@ -1403,7 +1602,8 @@ app.get('/api/payment/notify', async (req, res) => {
   try {
     const body = req.query || {};
     const provider = config.payProvider || 'xunhupay';
-    const actualOrderNo = body.out_trade_no || body.outTradeNo || body.order_no || body.orderNo || body.trade_no;
+    const actualOrderNo = body.trade_order_id || body.out_trade_no || body.outTradeNo || 
+                          body.order_no || body.orderNo || body.trade_no || body.openid;
     if (!actualOrderNo) return res.send('fail');
 
     let order = orders.get(actualOrderNo);
@@ -1932,6 +2132,81 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// 调试接口：直接查询虎皮椒支付状态，返回原始数据
+app.get('/api/debug/query/:orderNo', async (req, res) => {
+  const orderNo = req.params.orderNo;
+  const order = orders.get(orderNo);
+  
+  if (!order) {
+    return res.json({ error: '订单不存在', orderNo: orderNo });
+  }
+  
+  // 用官方文档参数查询
+  const appId = config.apiKey;
+  const appSecret = config.apiSecret;
+  const queryEndpoint = 'https://api.xunhupay.com/payment/query.html';
+  
+  // 方式1: 用 open_order_id 查询
+  const params1 = {
+    version: '1.1',
+    appid: appId,
+    open_order_id: String(order.apiOrderNo),
+    time: Math.floor(Date.now() / 1000),
+    nonce_str: crypto.randomBytes(8).toString('hex')
+  };
+  params1.hash = xunhupaySign(params1, appSecret);
+  
+  // 方式2: 用 out_trade_order 查询
+  const params2 = {
+    version: '1.1',
+    appid: appId,
+    out_trade_order: order.orderNo,
+    time: Math.floor(Date.now() / 1000),
+    nonce_str: crypto.randomBytes(8).toString('hex')
+  };
+  params2.hash = xunhupaySign(params2, appSecret);
+  
+  try {
+    // 先用 open_order_id 查
+    const postBody1 = JSON.stringify(params1);
+    const result1 = await httpRequest(queryEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postBody1) },
+      body: postBody1
+    });
+    
+    // 再用 out_trade_order 查
+    const postBody2 = JSON.stringify(params2);
+    const result2 = await httpRequest(queryEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postBody2) },
+      body: postBody2
+    });
+    
+    // 同时调用正式的queryMPayOrder函数
+    const officialResult = await queryMPayOrder(order.apiOrderNo || order.orderNo);
+    
+    res.json({
+      orderNo: orderNo,
+      localOrderNo: order.orderNo,
+      apiOrderNo: order.apiOrderNo,
+      orderStatus: order.status,
+      orderPaid: order.paid,
+      queryByOpenOrderId: {
+        params: params1,
+        rawResponse: result1
+      },
+      queryByOutTradeOrder: {
+        params: params2,
+        rawResponse: result2
+      },
+      queryMPayOrderResult: officialResult
+    });
+  } catch (e) {
+    res.json({ error: e.message, orderNo: orderNo, localOrderNo: order ? order.orderNo : null });
+  }
+});
+
 // 实时查询订单支付状态（优化版，用于前端高频轮询）
 app.get('/api/order/:orderNo/status', (req, res) => {
   const orderNo = req.params.orderNo;
@@ -1951,7 +2226,8 @@ app.get('/api/order/:orderNo/status', (req, res) => {
           success: true,
           orderNo: orderNo,
           status: 'paid',
-          paid: true,
+          paid: updatedOrder ? updatedOrder.paid : false,  // 真实金币到账状态
+          goldReceived: updatedOrder ? updatedOrder.paid : false,
           goldAmount: updatedOrder ? updatedOrder.goldAmount : 0,
           username: updatedOrder ? updatedOrder.username : null,
           justPaid: true
@@ -1979,7 +2255,8 @@ app.get('/api/order/:orderNo/status', (req, res) => {
       success: true,
       orderNo: orderNo,
       status: order.status,
-      paid: order.status === 'paid',
+      paid: order.paid,  // 真实金币到账状态（order.paid 而非 order.status）
+      goldReceived: order.paid,  // 明确字段：金币是否已到账
       goldAmount: order.goldAmount || 0,
       username: order.username,
       paidAt: order.paidAt

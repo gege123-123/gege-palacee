@@ -223,9 +223,10 @@ async function apiRequest(endpoint, options) {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache'
     };
-    // 如果有token则添加认证头
-    if (state.userToken) {
-      headers['Authorization'] = 'Bearer ' + state.userToken;
+    // 如果有token则添加认证头（多源兜底：state.userToken / localStorage.gege_user_token / authToken / userToken）
+    var token = state.userToken || localStorage.getItem('gege_user_token') || localStorage.getItem('authToken') || localStorage.getItem('userToken');
+    if (token) {
+      headers['Authorization'] = 'Bearer ' + token;
     }
     var url = API_BASE + endpoint;
     console.log('API请求:', url, options);
@@ -983,10 +984,41 @@ function updateScanPayQR() {
 // ============ 充值付款功能 ============
 var rechargePollingTimer = null;
 
+// 确保支付弹窗内部结构完整（showRechargeSuccessUI会替换，关闭后需要恢复）
+function ensureRechargePayModalStructure() {
+  var modal = document.getElementById('rechargePayModal');
+  if (!modal) return;
+  
+  // 如果找不到内部ID，说明被成功页面替换了，需要重建原始结构
+  if (!document.getElementById('rechargePayQr') || !document.getElementById('rechargePayInfo')) {
+    modal.innerHTML = 
+      '<div class="modal-content recharge-pay-modal">' +
+        '<span class="modal-close" onclick="closeRechargePay()">&times;</span>' +
+        '<h2 class="modal-title">🔍 扫码付款 · 自动验证</h2>' +
+        '<div class="recharge-pay-content">' +
+          '<div class="recharge-pay-amount" id="rechargePayAmount">¥0.00</div>' +
+          '<div class="recharge-pay-gold" id="rechargePayGold">获得 0 金币</div>' +
+          '<div class="recharge-pay-qr" id="rechargePayQr">' +
+            '<div class="pay-qr-loading"><div class="spinner"></div><p>正在生成付款码...</p></div>' +
+          '</div>' +
+          '<div class="recharge-pay-info" id="rechargePayInfo">' +
+            '<p class="pay-info-status">⏳ 等待扫码付款</p>' +
+            '<p class="pay-info-tip">请使用微信/支付宝扫描上方二维码</p>' +
+            '<p class="pay-info-timer">剩余时间：<span id="rechargePayTimer">30:00</span></p>' +
+          '</div>' +
+          '<div class="recharge-pay-hint" id="rechargePayHint" style="display:none;"></div>' +
+        '</div>' +
+      '</div>';
+  }
+}
+
 async function generateRechargeQR() {
   var amount = state.selectedRecharge;
   var price = getRechargePrice(amount);
   var gold = getRechargeGold(amount);
+  
+  // 确保支付弹窗内部关键元素存在（防止成功页面破坏结构后无法恢复）
+  ensureRechargePayModalStructure();
   
   // 检查支付配置
   var config = await checkServerConfig();
@@ -1017,9 +1049,10 @@ async function generateRechargeQR() {
       description: '充值' + gold + '金币'
     };
     
-    // 如果有用户token，直接在body中也传递一份（双重保险）
-    if (state.userToken) {
-      requestBody.token = state.userToken;
+    // 如果有用户token，直接在body中也传递一份（四重保险：state + localStorage多key）
+    var userToken = state.userToken || localStorage.getItem('gege_user_token') || localStorage.getItem('authToken') || localStorage.getItem('userToken');
+    if (userToken) {
+      requestBody.token = userToken;
     }
     
     var result = await apiRequest('/api/order/create', {
@@ -1077,24 +1110,36 @@ async function generateRechargeQR() {
           }
           
         } else {
-          // 网页链接：同时显示二维码和跳转按钮
+          // 网页链接：显示二维码，明确提示使用另一台手机扫码
           var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
           var payLink = result.qrUrl || result.payUrl || result.redirectUrl || '';
+          var qrImgUrl = result.qrCode || '';
+          var jumpUrl = '/pay-jump?orderNo=' + encodeURIComponent(result.orderNo || '') 
+            + '&payLink=' + encodeURIComponent(payLink)
+            + '&qrImgUrl=' + encodeURIComponent(qrImgUrl)
+            + '&amount=' + encodeURIComponent(String(price));
           
           if (rechargePayQr) {
             var html = '';
             
-            // 显示二维码图片（如果有）
+            // 显示二维码图片
             if (result.qrCode) {
-              html += '<img src="' + result.qrCode + '" alt="付款二维码" style="max-width:220px;max-height:220px;border-radius:12px;border:3px solid #FFD700;display:block;margin:0 auto;">';
-            }
-            
-            // 显示跳转按钮
-            if (isMobile) {
-              html += '<div style="margin-top:15px;"><a href="' + payLink + '" target="_blank" class="pay-redirect-btn" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:25px;text-decoration:none;font-weight:bold;font-size:16px;">📱 点击前往' + payTypeName + '支付 ¥' + price + '</a></div>';
-            } else {
-              html += '<p style="text-align:center;margin-top:10px;font-size:12px;color:#888;">💡 扫码支付或点击下方按钮跳转</p>';
-              html += '<div style="margin-top:10px;"><a href="' + payLink + '" target="_blank" id="payRedirectBtn" style="display:inline-block;padding:10px 20px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#5a2d0c;border-radius:20px;text-decoration:none;font-weight:bold;">🔗 前往' + payTypeName + '支付 ¥' + price + '</a></div>';
+              if (isMobile) {
+                html += '<a href="' + jumpUrl + '" style="display:block;text-align:center;text-decoration:none;">';
+                html += '<div style="background:#fff;padding:12px;border-radius:14px;display:inline-block;margin-top:10px;border:3px solid #FFD700;">';
+                html += '<img src="' + result.qrCode + '" alt="微信支付二维码" style="width:200px;height:200px;display:block;">';
+                html += '</div>';
+                html += '<div style="margin-top:12px;font-size:14px;font-weight:bold;color:#FFD700;">💰 支付 ¥' + price + ' 获得 ' + gold + ' 金币</div>';
+                html += '</a>';
+              } else {
+                html += '<img src="' + result.qrCode + '" alt="付款二维码" style="max-width:220px;max-height:220px;border-radius:12px;border:3px solid #FFD700;display:block;margin:0 auto;">';
+                html += '<div style="text-align:center;margin-top:10px;font-size:14px;font-weight:bold;color:#FFD700;">💰 支付 ¥' + price + ' 获得 ' + gold + ' 金币</div>';
+                // PC端保留警示框
+                html += '<div style="margin-top:12px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.35);border-radius:10px;padding:12px;margin:12px 8px 0 8px;">';
+                html += '<div style="font-size:14px;font-weight:bold;color:#ff6b6b;text-align:center;line-height:1.6;">⚠️ 请使用另一台手机的微信<br>扫描上方二维码支付</div>';
+                html += '<div style="font-size:12px;color:#FFD700;opacity:0.8;text-align:center;margin-top:6px;line-height:1.5;">本渠道不支持微信内长按识别支付<br>不支持截图/相册识别<br>必须使用另外一台手机扫码</div>';
+                html += '</div>';
+              }
             }
             
             rechargePayQr.innerHTML = html;
@@ -1105,11 +1150,16 @@ async function generateRechargeQR() {
               ? '<p class="pay-info-tip">✅ 已关联奴才账户，支付成功金币自动到账</p>' 
               : '<p class="pay-info-tip">💡 请先登录以启用自动到账功能</p>';
             
+            var confirmBtn = result.orderNo 
+              ? '<button onclick="manualConfirmRecharge(\'' + result.orderNo + '\')" style="display:block;width:100%;margin-top:12px;padding:14px;background:linear-gradient(135deg,#4ADE80,#22C55E);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;">✅ 充值完成，点击到账</button>'
+              : '';
+            
             rechargePayInfo.innerHTML = 
-              '<p class="pay-info-status">⏳ ' + (isMobile ? '点击按钮' : '扫码') + '付款 ¥' + price + ' (获得 ' + gold + ' 金币)</p>' +
+              '<p class="pay-info-status">⏳ 请扫码付款 ¥' + price + ' (获得 ' + gold + ' 金币)</p>' +
               userHintRedirect +
               '<p class="pay-info-timer">剩余时间：<span id="rechargePayTimer">30:00</span></p>' +
-              '<p class="pay-info-note">📱 支付成功后金币将自动充值到账户</p>';
+              '<p class="pay-info-note">📱 请使用另一台手机扫码支付<br>支付成功后点击下方按钮金币到账</p>' +
+              confirmBtn;
           }
         }
         
@@ -1536,6 +1586,61 @@ function stopPaymentPolling() {
   if (state.paymentPollingTimer) {
     clearInterval(state.paymentPollingTimer);
     state.paymentPollingTimer = null;
+  }
+}
+
+// 手动确认充值到账（用户点击"充值完成"按钮）
+async function manualConfirmRecharge(orderNo) {
+  if (!orderNo) {
+    showToast('订单号缺失，无法确认');
+    return;
+  }
+  
+  // 显示"查询中"状态
+  var btn = event && event.target ? event.target : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ 正在查询支付状态...';
+  }
+  
+  try {
+    var result = await apiRequest('/api/order/' + orderNo + '/confirm', {
+      method: 'POST'
+    });
+    
+    if (result && result.success) {
+      if (result.alreadyPaid) {
+        showToast('该订单已支付，金币已到账');
+      } else {
+        showToast('✅ 充值成功！+' + result.goldAdded + ' 金币已到账');
+      }
+      stopRechargePolling();
+      
+      // 刷新页面显示新金币
+      setTimeout(function() {
+        location.reload();
+      }, 1500);
+    } else if (result && result.notPaid) {
+      // 未检测到支付
+      showToast('❌ ' + result.message);
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '✅ 充值完成，点击到账';
+      }
+    } else {
+      showToast('❌ ' + (result && result.message ? result.message : '确认失败，请重试'));
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '✅ 充值完成，点击到账';
+      }
+    }
+  } catch (error) {
+    console.error('手动确认充值失败:', error);
+    showToast('❌ 网络错误，请重试');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '✅ 充值完成，点击到账';
+    }
   }
 }
 
